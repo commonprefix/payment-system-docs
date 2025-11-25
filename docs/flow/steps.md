@@ -1625,7 +1625,7 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
         offerIn = initialBalances.in * (5 / 20000)
 
         # Calculate output for initial size (with trading fee)
-        offerOut = [swapAssetIn](../amms/helpers.md#311-swapassetin)(initialBalances, offerIn, tradingFee)
+        offerOut = swapAssetIn(initialBalances, offerIn, tradingFee) # ../amms/helpers.md#311-swapassetin
 
         # Scale by Fibonacci number for this iteration
         fibonacci = [1, 1, 2, 3, 5, 8, 13, 21 ... 1346269]
@@ -1633,14 +1633,14 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
         offerOut = baseOut * fibMultiplier
 
         # Calculate required input to produce scaled output
-        offerIn = [swapAssetOut](../amms/helpers.md#212-swapassetout)(balances, offerOut, tradingFee)
+        offerIn = swapAssetOut(balances, offerOut, tradingFee) # ../amms/helpers.md#212-swapassetout
 
         amounts = {in: offerIn, out: offerOut}
         if clobQuality and Quality(amounts) < clobQuality:
             return None  # Generated offer can't compete with CLOB
     else:
         if clobQuality:
-            amounts = [changeSpotPriceQuality](../amms/helpers.md#314-changespotpricequality)(balances, clobQuality, tradingFee)
+            amounts = changeSpotPriceQuality(balances, clobQuality, tradingFee) # ../amms/helpers.md#314-changespotpricequality
             
             if not amounts:
                 # Return the biggest size this AMM can provide

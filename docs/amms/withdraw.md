@@ -250,7 +250,7 @@ def equalWithdrawTokens(
 
     # CASE 2: Partial withdrawal
     # Adjust LP tokens for precision (with fixAMMv1_3)
-    tokensAdj = [adjustLPTokensIn](helpers.md#25-adjustlptokensin-withdrawals)(rules, lptAMMBalance, lpTokensWithdraw, withdrawAll)
+    tokensAdj = adjustLPTokensIn(rules, lptAMMBalance, lpTokensWithdraw, withdrawAll) # helpers.md#25-adjustlptokensin-withdrawals
 
     if rules.enabled(fixAMMv1_3) and tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, STAmount{}, STAmount{}, None)
@@ -261,8 +261,8 @@ def equalWithdrawTokens(
 
     # Calculate withdrawal amounts for both assets
     # With fixAMMv1_3: Round DOWN (conservative, ensures pool keeps enough)
-    amountWithdraw = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amountBalance, frac, IsDeposit=False)
-    amount2Withdraw = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amount2Balance, frac, IsDeposit=False)
+    amountWithdraw = getRoundedAsset(rules, amountBalance, frac, IsDeposit=False) # helpers.md#231-getroundedasset-simple-pseudo-code
+    amount2Withdraw = getRoundedAsset(rules, amount2Balance, frac, IsDeposit=False) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Prevent one-sided pool withdrawal due to rounding
     # If either amount rounds to zero, fail so user withdraws more tokens
@@ -331,7 +331,7 @@ def equalWithdrawLimit(
 
     # Calculate LP tokens for this fraction
     # Using simple version of getRoundedLPTokens (direct fraction)
-    tokensAdj = [getRoundedLPTokens](helpers.md#211-getroundedlptokens-simple-pseudo-code)(rules, lptAMMBalance, frac, IsDeposit=False)
+    tokensAdj = getRoundedLPTokens(rules, lptAMMBalance, frac, IsDeposit=False) # helpers.md#211-getroundedlptokens-simple-pseudo-code
 
     if rules.enabled(fixAMMv1_3) and tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, STAmount{})
@@ -341,7 +341,7 @@ def equalWithdrawLimit(
 
     # Calculate how much asset2 would be withdrawn for this fraction
     # Using simple version of getRoundedAsset (direct fraction)
-    amount2Withdraw = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amount2Balance, frac, IsDeposit=False)
+    amount2Withdraw = getRoundedAsset(rules, amount2Balance, frac, IsDeposit=False) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Check if calculated amount2 fits within user's max constraint
     if amount2Withdraw <= amount2:
@@ -364,11 +364,11 @@ def equalWithdrawLimit(
 
     # Calculate how much asset1 would be withdrawn for this fraction (preliminary)
     # Using simple version of getRoundedAsset (direct fraction)
-    amountWithdraw = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amountBalance, frac, IsDeposit=False)
+    amountWithdraw = getRoundedAsset(rules, amountBalance, frac, IsDeposit=False) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Calculate LP tokens for this fraction
     # Using simple version of getRoundedLPTokens (direct fraction)
-    tokensAdj = [getRoundedLPTokens](helpers.md#211-getroundedlptokens-simple-pseudo-code)(rules, lptAMMBalance, frac, IsDeposit=False)
+    tokensAdj = getRoundedLPTokens(rules, lptAMMBalance, frac, IsDeposit=False) # helpers.md#211-getroundedlptokens-simple-pseudo-code
 
     if rules.enabled(fixAMMv1_3) and tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, STAmount{})
@@ -378,7 +378,7 @@ def equalWithdrawLimit(
 
     # Recalculate asset1 amount with adjusted fraction
     # Using simple version of getRoundedAsset (direct fraction)
-    amountWithdraw = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amountBalance, frac, IsDeposit=False)
+    amountWithdraw = getRoundedAsset(rules, amountBalance, frac, IsDeposit=False) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Check if calculated amount fits within user's max constraint
     if rules.enabled(fixAMMv1_3):
@@ -428,10 +428,10 @@ def singleWithdraw(
         tfee):             # Trading fee (for single-asset withdrawal)
     # Calculate LP tokens using the single-asset withdrawal formula
     # lpTokensIn solves: "How many LP tokens to redeem to get `amount` assets?"
-    tokens = [lpTokensIn](helpers.md#331-lptokensin-equation-7)(amountBalance, amount, lptAMMBalance, tfee)
+    tokens = lpTokensIn(amountBalance, amount, lptAMMBalance, tfee) # helpers.md#331-lptokensin-equation-7
 
     # Adjust LP tokens for precision (with fixAMMv1_3)
-    tokensAdj = [adjustLPTokensIn](helpers.md#25-adjustlptokensin-withdrawals)(rules, lptAMMBalance, tokens, isWithdrawAll(tx))
+    tokensAdj = adjustLPTokensIn(rules, lptAMMBalance, tokens, isWithdrawAll(tx)) # helpers.md#25-adjustlptokensin-withdrawals
 
     if tokensAdj == 0:
         if not rules.enabled(fixAMMv1_3):
@@ -486,13 +486,13 @@ def singleWithdrawTokens(
         lpTokensWithdraw,  # LP tokens to redeem
         tfee):             # Trading fee (for single-asset withdrawal)
     # Adjust LP tokens for precision (with fixAMMv1_3)
-    tokensAdj = [adjustLPTokensIn](helpers.md#25-adjustlptokensin-withdrawals)(rules, lptAMMBalance, lpTokensWithdraw, isWithdrawAll(tx))
+    tokensAdj = adjustLPTokensIn(rules, lptAMMBalance, lpTokensWithdraw, isWithdrawAll(tx)) # helpers.md#25-adjustlptokensin-withdrawals
 
     if rules.enabled(fixAMMv1_3) and tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, STAmount{})
 
     # Calculate withdrawal amount using ammAssetOut formula
-    amountWithdraw = [ammAssetOut](helpers.md#332-ammassetout-equation-8)(amountBalance, lptAMMBalance, tokensAdj, tfee)
+    amountWithdraw = ammAssetOut(amountBalance, lptAMMBalance, tokensAdj, tfee) # helpers.md#332-ammassetout-equation-8
 
     # Check if calculated amount meets user's minimum (if specified)
     if amount == 0 or amountWithdraw >= amount:

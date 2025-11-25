@@ -218,7 +218,7 @@ def updateSlot(
         auctionSlot.makeFieldAbsent(sfAuthAccounts)
 
     # Burn LP tokens
-    saBurn = [adjustLPTokens](helpers.md#12-adjustlptokens)(lptAMMBalance, toSTAmount(lpTokenIssue, burn), IsDeposit::No)
+    saBurn = adjustLPTokens(lptAMMBalance, toSTAmount(lpTokenIssue, burn), IsDeposit::No) # helpers.md#12-adjustlptokens
 
     if saBurn >= lptAMMBalance:
         # This should never happen

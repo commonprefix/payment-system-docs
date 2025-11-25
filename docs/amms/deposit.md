@@ -270,7 +270,7 @@ def equalDepositLimit(
     frac = amount / amountBalance
 
     # Calculate LP tokens for this fraction (with precision adjustment)
-    tokensAdj = [getRoundedLPTokens](helpers.md#211-getroundedlptokens-simple-pseudo-code)(rules, lptAMMBalance, frac, IsDeposit=True)
+    tokensAdj = getRoundedLPTokens(rules, lptAMMBalance, frac, IsDeposit=True) # helpers.md#211-getroundedlptokens-simple-pseudo-code
 
     if tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, None)
@@ -279,7 +279,7 @@ def equalDepositLimit(
     frac = adjustFracByTokens(rules, lptAMMBalance, tokensAdj, frac)
 
     # Calculate how much asset2 is needed for this fraction
-    amount2Deposit = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amount2Balance, frac, IsDeposit=True)
+    amount2Deposit = getRoundedAsset(rules, amount2Balance, frac, IsDeposit=True) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Check if calculated amount2 fits within user's max constraint
     if amount2Deposit <= amount2:
@@ -303,7 +303,7 @@ def equalDepositLimit(
 
     # Calculate LP tokens for this fraction
     # Using simple version of getRoundedLPTokens (direct fraction)
-    tokensAdj = [getRoundedLPTokens](helpers.md#211-getroundedlptokens-simple-pseudo-code)(rules, lptAMMBalance, frac, IsDeposit=True)
+    tokensAdj = getRoundedLPTokens(rules, lptAMMBalance, frac, IsDeposit=True) # helpers.md#211-getroundedlptokens-simple-pseudo-code
 
     if tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, None)
@@ -312,7 +312,7 @@ def equalDepositLimit(
     frac = adjustFracByTokens(rules, lptAMMBalance, tokensAdj, frac)
 
     # Calculate how much asset1 is needed for this fraction
-    amountDeposit = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amountBalance, frac, IsDeposit=True)
+    amountDeposit = getRoundedAsset(rules, amountBalance, frac, IsDeposit=True) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Check if calculated amount fits within user's max constraint
     if amountDeposit <= amount:
@@ -370,7 +370,7 @@ def equalDepositTokens(
         deposit2Min,       # Optional: min amount2 constraint (from tx[sfAmount2])
         tfee):             # Trading fee (not used for proportional deposits)
     # Adjust LP tokens for precision (with fixAMMv1_3)
-    tokensAdj = [adjustLPTokensOut](helpers.md#24-adjustlptokensout-deposits)(rules, lptAMMBalance, lpTokensDeposit)
+    tokensAdj = adjustLPTokensOut(rules, lptAMMBalance, lpTokensDeposit) # helpers.md#24-adjustlptokensout-deposits
 
     if tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, None)
@@ -380,8 +380,8 @@ def equalDepositTokens(
 
     # Calculate required deposit amounts for both assets
     # Both assets must be deposited proportionally to maintain the pool ratio
-    amountDeposit = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amountBalance, frac, IsDeposit=True)
-    amount2Deposit = [getRoundedAsset](helpers.md#231-getroundedasset-simple-pseudo-code)(rules, amount2Balance, frac, IsDeposit=True)
+    amountDeposit = getRoundedAsset(rules, amountBalance, frac, IsDeposit=True) # helpers.md#231-getroundedasset-simple-pseudo-code
+    amount2Deposit = getRoundedAsset(rules, amount2Balance, frac, IsDeposit=True) # helpers.md#231-getroundedasset-simple-pseudo-code
 
     # Execute the deposit
     return deposit(
@@ -468,10 +468,10 @@ def singleDeposit(
         amount,            # User's deposit amount (from tx[sfAmount])
         lpTokensDepositMin,  # Optional: min LP tokens expected (from tx[sfLPTokenOut])
         tfee):             # Trading fee (for single-asset deposit)
-    tokens = [lpTokensOut](helpers.md#321-lptokensout-equation-3)(amountBalance, amount, lptAMMBalance, tfee)
+    tokens = lpTokensOut(amountBalance, amount, lptAMMBalance, tfee) # helpers.md#321-lptokensout-equation-3
 
     # Adjust tokens for precision (with fixAMMv1_3)
-    tokensAdj = [adjustLPTokensOut](helpers.md#24-adjustlptokensout-deposits)(rules, lptAMMBalance, tokens)
+    tokensAdj = adjustLPTokensOut(rules, lptAMMBalance, tokens) # helpers.md#24-adjustlptokensout-deposits
 
     if tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, None)
@@ -522,13 +522,13 @@ def singleDepositTokens(
         lpTokensDeposit,   # Exact LP tokens desired (from tx[sfLPTokenOut])
         tfee):             # Trading fee (for single-asset deposit)
     # Adjust LP tokens for precision (with fixAMMv1_3)
-    tokensAdj = [adjustLPTokensOut](helpers.md#24-adjustlptokensout-deposits)(rules, lptAMMBalance, lpTokensDeposit)
+    tokensAdj = adjustLPTokensOut(rules, lptAMMBalance, lpTokensDeposit) # helpers.md#24-adjustlptokensout-deposits
 
     if tokensAdj == 0:
         return (tecAMM_INVALID_TOKENS, None)
 
     # Calculate how much asset is needed to get these LP tokens
-    amountDeposit = [ammAssetIn](helpers.md#322-ammassetin-equation-4)(amountBalance, lptAMMBalance, tokensAdj, tfee)
+    amountDeposit = ammAssetIn(amountBalance, lptAMMBalance, tokensAdj, tfee) # helpers.md#322-ammassetin-equation-4
 
     # Check if calculated deposit exceeds user's maximum
     if amountDeposit > amount:
@@ -596,8 +596,8 @@ def singleDepositEPrice(
     if amount != 0:
         # Calculate LP tokens we'd get for this deposit
         # lpTokensOut uses Equation 3 (single-asset deposit formula)
-        tokens = [lpTokensOut](helpers.md#321-lptokensout-equation-3)(amountBalance, amount, lptAMMBalance, tfee)
-        tokens = [adjustLPTokensOut](helpers.md#24-adjustlptokensout-deposits)(rules, lptAMMBalance, tokens)
+        tokens = lpTokensOut(amountBalance, amount, lptAMMBalance, tfee) # helpers.md#321-lptokensout-equation-3
+        tokens = adjustLPTokensOut(rules, lptAMMBalance, tokens) # helpers.md#24-adjustlptokensout-deposits
 
         if tokens <= 0:
             return (tecAMM_INVALID_TOKENS, None)
