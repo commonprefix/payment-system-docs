@@ -1007,23 +1007,27 @@ def consumeOffer(sb, offer, stpAmt):
 
 **Offer Iteration and Funding:**
 
-The order book traversal in `forEachOffer` is implemented through the `OfferStream` class, which contains a `BookTip` member and delegates directory iteration to it.[^offerstream-implementation] `BookTip` provides directory traversal sorted by quality, while `OfferStream` adds expiration checks, funding verification, and frozen asset handling. When processing each offer, `OfferStream::step()` calls `tip_.step()` to advance through the directory, then retrieves the offer entry via `tip_.entry()` and quality via `tip_.quality()`.
+The order book traversal in `forEachOffer` is implemented through `FlowOfferStream`[^flowofferstream-class], which extends `TOfferStreamBase`[^tofferstreambase-class] with permanent offer removal tracking. `TOfferStreamBase` contains a `BookTip` member and delegates directory iteration to it.[^offerstream-implementation] `BookTip` provides directory traversal sorted by quality, while `TOfferStreamBase` adds expiration checks, funding verification, and frozen asset handling. When processing each offer, `TOfferStreamBase::step()` calls `tip_.step()` to advance through the directory, then retrieves the offer entry via `tip_.entry()` and quality via `tip_.quality()`.
 
-[^offerstream-implementation]: `OfferStream` implementation with `BookTip` delegation: [`OfferStream.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.cpp#L184-L212)
+[^flowofferstream-class]: [`OfferStream.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.h#L131-L151)
+[^tofferstreambase-class]: [`OfferStream.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.h#L17-L111)
+[^offerstream-implementation]: `TOfferStreamBase` implementation with `BookTip` delegation: [`OfferStream.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.cpp#L184-L212)
 
-During iteration, `OfferStream::step()` determines which offers to remove from the order book.[^offerstream-step] It marks offers for permanent removal when the ledger entry is missing, the offer has expired, either amount is zero, the asset is deep frozen, the offer owner's account is no longer in the offer's domain (for domain-restricted offers), or the owner has zero balance. For unfunded offers and tiny offers with reduced quality under `fixReducedOffersV1`, it distinguishes between offers that were already in that state versus offers that became that way during the current transaction by comparing balances in the current view against the pristine `cancelView`.
+`FlowOfferStream` adds the `permToRemove` collection, which tracks offers that should be permanently removed even if the strand is not applied. This is used by `forEachOffer` to track self-crossed offers and other invalid offers that need removal regardless of transaction outcome.
+
+During iteration, `TOfferStreamBase::step()` determines which offers to remove from the order book.[^offerstream-step] It marks offers for permanent removal when the ledger entry is missing, the offer has expired, either amount is zero, the asset is deep frozen, the offer owner's account is no longer in the offer's domain (for domain-restricted offers), or the owner has zero balance. For unfunded offers and tiny offers with reduced quality under `fixReducedOffersV1`, it distinguishes between offers that were already in that state versus offers that became that way during the current transaction by comparing balances in the current view against the pristine `cancelView`.
 Only offers that were already unfunded or tiny are permanently removed from the ledger; offers that became unfunded or tiny during execution are simply skipped for this transaction but remain in the order book.
 
-[^offerstream-step]: Offer removal logic in `OfferStream::step()`: [`OfferStream.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.cpp#L193-L320)
+[^offerstream-step]: Offer removal logic in `TOfferStreamBase::step()`: [`OfferStream.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.cpp#L193-L320)
 
-For each valid offer that passes these checks, `OfferStream` verifies whether the offer owner has sufficient balance to cover their takerGets obligation.[^offerstream-funds-helper]
+For each valid offer that passes these checks, `TOfferStreamBase` verifies whether the offer owner has sufficient balance to cover their takerGets obligation.[^offerstream-funds-helper]
 For IOU issuers, this returns the full requested amount directly since they can issue unlimited amounts.
 For MPT issuers, this returns the available minting capacity (`MaximumAmount - OutstandingAmount`) via `issuerFundsToSelfIssue`; if this amount is zero or negative (MaximumAmount reached), the offer is treated as unfunded and removed.
-For non-issuers, `OfferStream` queries the owner's actual available balance through `accountHolds` and stores it in the `ownerFunds_` member.
+For non-issuers, `TOfferStreamBase` queries the owner's actual available balance through `accountHolds` and stores it in the `ownerFunds_` member.
 
 [^offerstream-funds-helper]: Owner funds verification via `accountFundsHelper`: [`OfferStream.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/OfferStream.cpp#L83-L109)
 
-If the owner's balance is less than takerGets, the offer is underfunded but can still partially fill. The `OfferStream::ownerFunds()` method returns this actual available balance, which `forEachOffer` uses to proportionally adjust the offer amounts via `Quality::ceil_out()`.
+If the owner's balance is less than takerGets, the offer is underfunded but can still partially fill. The `TOfferStreamBase::ownerFunds()` method returns this actual available balance, which `forEachOffer` uses to proportionally adjust the offer amounts via `Quality::ceil_out()`.
 This adjustment maintains the offer's exchange rate while scaling down the size to match available funds, enabling offers to partially fill when the owner has insufficient balance. 
 The adjustment rounds down under the `fixReducedOffersV1` amendment to prevent order book blocking where dust amounts could prevent offer consumption.
 
@@ -1322,7 +1326,7 @@ def fwdImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
 `BookStep::forEachOffer`[^bookstep-foreachoffer] iterates through available liquidity sources (order book offers and AMM offers) in quality order, calling a provided callback for each valid offer until the payment requirements are satisfied.
 
 Given a callback function and the previous step's debt direction, this function:
-1. Calculates transfer fees that apply to offers in this book (based on input/output issuers and previous step's debt direction)
+1. Calculates transfer rates: input rate applies when the previous step redeems; output rate applies when ownerPaysTransferFee_ is set (true for offer crossings, checks and bridges)
 2. Iterates through order book offers sorted by quality (best prices first)
 3. Generates AMM offers when available and compares their quality with CLOB offers (skips AMM if domain filtering is active)
 4. For each offer, performs asset-specific validation:
@@ -1343,41 +1347,36 @@ The callback determines how much liquidity to consume from each offer and whethe
 def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
                  prevStepDebtDirection: DebtDirection,
                  callback: Callable) -> (removedOffers: Set[uint256], offersConsumed: int):
-    # Charge the offer owner, not the sender
-    # Charge a fee even if the owner is the same as the issuer
-    # Calculate amount that goes to the taker and the amount charged the offer owner
+    # Calculate transfer rates for this book step.
+    # These rates determine fees charged when crossing offers.
 
-    # Transfer rate for incoming currency
-    # Only when the previous step redeems (pulls) from this issuer
-    # do we charge the transfer-in fee. If previous step issues, no fee on input.
+    # Input transfer rate: only charged when previous step redeems (pulls from issuer)
     transferRateIn = rate(sb, book_.in, strandDst_).value if redeems(prevStepDebtDirection) else QUALITY_ONE
 
-    # Transfer rate for outgoing currency
-    # Always charge the transfer fee, even if the owner is the issuer
+    # Output transfer rate: charged when ownerPaysTransferFee_ is set
+    # Code comment: Always charge the transfer fee, even if the owner is the issuer
     transferRateOut = rate(sb, book_.out, strandDst_).value if ownerPaysTransferFee_ else QUALITY_ONE
 
-    # Create counter and offer stream
-    counter = StepCounter(MaxOffersToConsume)
+    counter = StepCounter(1000)
     offers = FlowOfferStream(sb, afView, book_, sb.parentCloseTime(), counter)
 
     offerAttempted = False
-    ofrQ = None  # Optional quality
+    ofrQ = None  # Tracks quality of first offer attempted in this iteration
 
     # Lambda to execute each offer (both CLOB and AMM)
     def execOffer(offer):
         nonlocal offerAttempted, ofrQ
 
-        # Note that offer.quality() returns a (non-optional) Quality.
+        # Code comment: Note that offer.quality() returns a (non-optional) Quality.
         # So ofrQ is always safe to use below this point in the lambda.
         if not ofrQ:
             ofrQ = offer.quality()
         elif ofrQ != offer.quality():
+            # Stop when quality changes - only process same quality offers per iteration
             return False
 
-        # Check for self-crossing (offer crossing only)
-        # When Alice creates an offer that crosses her own existing offer,
-        # we don't want to match them. Instead, we remove the old offer.
-        # This only applies to offer crossing on default paths. If this is a BookPaymentStep, returns false
+        # Handle self-crossing (offer crossing only, not payments).
+        # Removes old offers when a user's new offer would cross their existing one.
         if limitSelfCrossQuality(strandSrc_, strandDst_, offer, ofrQ, offers, offerAttempted):
             return True
 
@@ -1387,31 +1386,31 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
         isAssetOutMPT = assetOut.holds<MPTIssue>()
         owner = offer.owner()
 
-        # Create MPToken for the offer's owner. No need to check for the reserve
-        # since the offer is removed if it is consumed. Therefore, the owner count
-        # remains the same.
+        # Code comment: Create MPToken for the offer's owner. No need to check
+        # for the reserve since the offer is removed if it is consumed.
+        # Therefore, the owner count remains the same.
         if isAssetInMPT:
             if checkCreateMPT(sb, assetIn.get<MPTIssue>(), owner) != tesSUCCESS:
                 return True
 
-        # It shouldn't matter from auth point of view whether it's sb or afView.
-        # Amendment guard this change just in case.
+        # Code comment: It shouldn't matter from auth point of view whether it's sb
+        # or afView. Amendment guard this change just in case.
         applyView = sb if sb.rules().enabled(featureMPTokensV2) else afView
 
-        # Make sure offer owner has authorization to own Assets from issuer if IOU.
-        # An account can always own XRP or their own Assets.
+        # Code comment: Make sure offer owner has authorization to own Assets from issuer
+        # if IOU. An account can always own XRP or their own Assets.
         # If MPT then MPTDEX should be allowed.
         if (requireAuth(applyView, assetIn, owner) != tesSUCCESS or
             (isAssetInMPT and checkMPTDEXAllowed(applyView, assetIn, owner, None) != tesSUCCESS) or
             (isAssetOutMPT and checkMPTDEXAllowed(applyView, assetOut, owner, None) != tesSUCCESS)):
-            # Offer owner not authorized to hold IOU/MPT from issuer.
+            # Code comment: Offer owner not authorized to hold IOU/MPT from issuer.
             # Remove this offer even if no crossing occurs.
             if offer.key():
                 offers.permRmOffer(offer.key())
             if not offerAttempted:
-                # Change quality only if no previous offers were tried.
+                # Code comment: Change quality only if no previous offers were tried.
                 ofrQ = None
-            # Returning true causes offers.step() to delete the offer.
+            # Code comment: Returning true causes offers.step() to delete the offer.
             return True
 
         if not checkQualityThreshold(offer.quality()):
@@ -1427,35 +1426,37 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
 
         ofrAmt = offer.amount()
 
+        # stpAmt represents what the step consumes/produces (includes transfer fees)
         stpAmt = TAmounts(
             mulRatio(ofrAmt.in, ofrInRate, QUALITY_ONE, roundUp=True),
             ofrAmt.out
         )
 
-        # Owner pays the transfer fee
+        # What the offer owner actually gives (output amount adjusted for transfer fee)
         ownerGives = mulRatio(ofrAmt.out, ofrOutRate, QUALITY_ONE, roundUp=False)
 
+        # For funded offers (owner is issuer), use ownerGives directly.
+        # Otherwise, check owner's actual balance.
         funds = ownerGives if offer.isFunded() else offers.ownerFunds()
 
-        # Only if CLOB offer
+        # Limit offer if owner doesn't have enough funds (CLOB offers only)
         if funds < ownerGives:
             # We already know offer.owner() != offer.issueOut().account
             ownerGives = funds
             stpAmt.out = mulRatio(ownerGives, QUALITY_ONE, ofrOutRate, roundUp=False)
 
-            # It turns out we can prevent order book blocking by (strictly)
+            # Code comment: It turns out we can prevent order book blocking by (strictly)
             # rounding down the ceil_out() result. This adjustment changes
             # transaction outcomes, so it must be made under an amendment.
             ofrAmt = offer.limitOut(ofrAmt, stpAmt.out, roundUp=False)
 
             stpAmt.in = mulRatio(ofrAmt.in, ofrInRate, QUALITY_ONE, roundUp=True)
 
-        # Limit offer's input if MPT, BookStep is the first step (an issuer is making
-        # a cross-currency payment), and this offer is not owned by the issuer.
-        # Otherwise, OutstandingAmount may overflow.
+        # Code comment: Limit offer's input if MPT, BookStep is the first step (an issuer
+        # is making a cross-currency payment), and this offer is not owned
+        # by the issuer. Otherwise, OutstandingAmount may overflow.
         issuer = assetIn.getIssuer()
         if isAssetInMPT and not prevStep_ and owner != issuer:
-            # Funds available to issue
             available = accountHolds(sb, issuer, assetIn, fhIGNORE_FREEZE, ahIGNORE_AUTH)
             if stpAmt.in > available:
                 limitStepIn(offer, ofrAmt, stpAmt, ownerGives, ofrInRate, ofrOutRate, available)
@@ -1463,13 +1464,13 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
         offerAttempted = True
         return callback(offer, ofrAmt, stpAmt, ownerGives, ofrInRate, ofrOutRate)
 
-    # At any payment engine iteration, AMM offer can only be consumed once.
+    # Code comment: At any payment engine iteration, AMM offer can only be consumed once.
     def tryAMM(lobQuality):
-        # AMM doesn't support domain yet
+        # AMM doesn't support permissioned DEX yet
         if book_.domain:
             return True
 
-        # If offer crossing then use either LOB quality or nullopt
+        # Code comment: If offer crossing then use either LOB quality or nullopt
         # to prevent AMM being blocked by a lower quality LOB.
         if sb.rules().enabled(fixAMMv1_1) and lobQuality:
             qualityThreshold = qualityThreshold(lobQuality)
@@ -1479,6 +1480,7 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
         ammOffer = getAMMOffer(sb, qualityThreshold)
         return not ammOffer or execOffer(ammOffer)
 
+    # Main loop: try AMM first, then iterate through CLOB offers
     if offers.step():
         if tryAMM(offers.tip().quality()):
             while True:
@@ -1487,7 +1489,7 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
                 if not offers.step():
                     break
     else:
-        # Might have AMM offer if there are no LOB offers.
+        # Code comment: Might have AMM offer if there are no CLOB offers.
         tryAMM(None)
 
     return (offers.permToRemove(), counter.count())
