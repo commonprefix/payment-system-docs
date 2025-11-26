@@ -1330,14 +1330,14 @@ Given a callback function and the previous step's debt direction, this function:
 2. Iterates through order book offers sorted by quality (best prices first)
 3. Generates AMM offers when available and compares their quality with CLOB offers (skips AMM if domain filtering is active)
 4. For each offer, performs asset-specific validation:
-   - Creates MPToken for offer owner if input is MPT
+   - Creates MPToken for the offer owner if input is MPT (if it does not already exist) 
    - Validates authorization via `requireAuth` (Tokens check trust lines, MPTs check holder authorization)
    - For MPTs, validates DEX trading permissions via `checkMPTDEXAllowed`
    - Checks offer funding and calculates transfer fees
-   - For MPT input on first step, limits input amount to prevent issuer overflow. `MaximumAmount - OutstandingAmount` should never become negative.
+   - For MPT input on the first step, limits input amount to prevent issuer overflow. `MaximumAmount - OutstandingAmount` should never become negative.
 5. Calls the callback with calculated amounts (offer amount, step amount, owner gives, transfer rates)
 6. Tracks which offers should be removed (expired, unfunded, or fully consumed)
-7. Stops when callback returns false or the book is exhausted
+7. Stops when the callback returns false or the book is exhausted
 
 The callback determines how much liquidity to consume from each offer and whether to continue processing more offers.
 
