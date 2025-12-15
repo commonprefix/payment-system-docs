@@ -1,5 +1,5 @@
-> 🚧 **Work in Progress**
-> This documentation is under development
+> [!WARNING]
+> 🚧 This documentation is **work in progress**
 
 # 1. XRPL Payment System
 
