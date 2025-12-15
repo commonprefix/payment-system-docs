@@ -3,6 +3,7 @@
 
 # 1. XRPL Payment System
 
+> [!IMPORTANT]
 > This is a technical specification document intended for developers implementing or verifying XRPL payment system behavior. For user-facing documentation and a high-level overview of XRPL features, please visit [https://xrpl.org/docs](https://xrpl.org/docs).
 
 The XRP Ledger is a multi-currency network with a built-in decentralized exchange, and its payment system lets value move across all of those asset types. At its heart is the Payment Engine that figures out how value should travel and then carries out those moves so payments can seamlessly draw on trust lines, MPTs, order books, AMMs, and direct XRP. This document, as outlined in the [scope document](overview/scope.md), guides you through that landscape. It explains the ledger objects and transactions and the coordination between discovering viable routes and executing the actual transfer.
