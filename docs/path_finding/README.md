@@ -212,8 +212,6 @@ Starting from Alice with USD, the algorithm will expand each node in the path ty
   - MPT is the destination so adds `[USD Issuer, USD/MPT Book]` to complete paths
 - `"safd"`: Has no incomplete paths to examine
 
-*No paths produced by `"safd"`*
-
 **Step 3: Expand Path Type `"sbfd"`**
 
 Starting from Alice with USD:
