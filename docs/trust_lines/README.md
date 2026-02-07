@@ -23,7 +23,7 @@
 
 Trust lines are a mechanism that enables the XRP Ledger to support user-issued [IOUs](../glossary.md#iou). They represent bilateral relationships between accounts that establish trust limits and govern the flow of value for specific IOUs.
 
-Think of a trust line as a credit agreement: it defines how much of a particular IOU one account is willing to hold from an issuer, along with the terms of that relationship.
+Think of a trust line as a credit agreement: it defines how much of a particular IOU one account holds from an issuer, along with the terms of that relationship.
 
 For example, suppose Alice is an issuer and Bob wants to hold USD issued by her. Bob would create a trust line, specifying USD as the currency code and Alice's address as the issuer. 
 Alice can now send USD to Bob. 
@@ -35,8 +35,16 @@ If Alice's account contains `RequireAuth` flag, then her trust lines have to be 
 
 Trust lines have a concept of QualityIn and QualityOut. This is covered in [Cross Currency Payments section](../payments/README.md#42-cross-currency-payment-execution) and [trust line quality in DirectStepI](../flow/steps.md#221-quality-implementation). For the sake of manipulating `RippleState` ledger entry, it is important to know that a quality of `1,000,000,000` is the default quality (QUALITY_ONE). This represents a 1:1 transfer rate, meaning the full amount is transferred without adjustment during cross-currency payments through this trust line.
 
-Trust line limits define the maximum amount of a IOU an account is willing to hold. The `LimitAmount` field in the `TrustSet` transaction specifies this maximum. A limit of 0 means the account will not accept any incoming IOUs on that trust line. Trust line limits are soft limits - they can be exceeded during offer crossing, as creating an offer is considered explicit consent to receive IOUs. 
+Trust line limits define the maximum amount of an IOU an account is willing to hold. The `LimitAmount` field in the `TrustSet` transaction specifies this maximum. A limit of 0 means the account will not accept any incoming IOUs on that trust line. Trust line limits are soft limits - they can be exceeded during offer crossing, as creating an offer is considered explicit consent to receive IOUs. 
 See [DirectIOfferCrossingStep](../flow/steps.md#23-directioffercrossingstep-offer-crossing-specific-implementation) for implementation details.
+
+Payments on the XRP Ledger often need to flow through intermediate accounts to reach the destination. For example, if Alice wants to pay Bob in USD and both hold trust lines to the same issuer, the payment flows through the issuer: Alice's balance on her trust line with Issuer decreases, and Bob's balance on his trust line with Issuer increases. When an account other than the issuer sits between two trust lines for the same currency, the payment can also flow through that account, entering on one trust line and exiting on another. This is called **rippling**.
+
+The NoRipple flag (`lsfLowNoRipple` / `lsfHighNoRipple`) is a per-account, per-trust-line flag that controls whether a trust line can be used for rippling. A payment is blocked from rippling through an account only when that account has NoRipple set on **both** the trust line the payment enters on and the trust line it exits on. If the account has NoRipple cleared on at least one of the two trust lines, the payment can flow through.
+
+An issuer who sets `DefaultRipple` (`lsfDefaultRipple`) on their account will have NoRipple cleared on their side of every new trust line. Since the issuer's side is always clear, the both-sides condition can never be met, and payments can always ripple through the issuer. A regular holder who does not set `DefaultRipple` will have NoRipple set on their side of every new trust line. If the holder has two trust lines for the same currency (e.g., USD.IssuerA and USD.IssuerB), both will have NoRipple set on the holder's side, so the both-sides condition is met and payments cannot ripple through the holder's account. This protects the holder from having their balance used as a pass-through without their consent.
+
+NoRipple is checked during both [path finding](../path_finding/README.md) and [payment execution](../flow/steps.md#215-check-implementation). Path finding uses NoRipple as a heuristic filter to avoid exploring paths that would be rejected. The flow engine enforces it as a hard constraint, failing the strand with `terNO_RIPPLE` when violated. See [trust line creation](#3112-state-changes) for how NoRipple flags are initialized.
 
 ## 1.1. Default State
 
@@ -49,7 +57,7 @@ A trust line is in **default state** when both accounts have all their parameter
 
 - **QualityIn**: 0 or absent (equivalent to QUALITY_ONE = 1,000,000,000)
 - **QualityOut**: 0 or absent (equivalent to QUALITY_ONE = 1,000,000,000)
-- **NoRipple flag**: matches the account's `lsfDefaultRipple` setting
+- **NoRipple flag**: set if the account does **not** have `lsfDefaultRipple`; cleared if it does
 - **Freeze flag**: not set
 - **Limit**: 0
 - **Balance**: 0 or negative from the account's perspective (meaning the account owes IOUs rather than holds them) 
@@ -230,8 +238,7 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 
 - `tefINTERNAL`: source account does not exist.
 - `tecNO_DST`: destination account does not exist.
-- `tecNO_PERMISSION`: amendment [fix1578](https://xrpl.org/resources/known-amendments#fix1578) is enabled, the user is trying to set
-  tfSetNoRipple and the source account's balance on the trust line is negative.
+- `tecNO_PERMISSION`: the user is trying to set `tfSetNoRipple` and the source account's balance on the trust line is negative.
 - `tecINSUF_RESERVE_LINE`: user does not have enough balance to cover the reserve and wants to modify an existing trust line, regardless
   of whether they or the counterparty have created the original trust line.
 - `tecNO_LINE_INSUF_RESERVE`: user does not have enough balance to cover the reserve and wants to create a new trust line. 
@@ -240,7 +247,7 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 #### 3.1.1.2. State Changes
 
 - `RippleState` object is **deleted** if an existing trust line exists when sending `TrustSet` transaction and:
-    - If [fixTrustLinesToSelf](https://xrpl.org/resources/known-amendments#fixtrustlinestoself) is enabled and source and destination accounts are the same. 
+    - If [fixTrustLinesToSelf](https://xrpl.org/resources/known-amendments#fixtrustlinestoself) is **not** enabled and source and destination accounts are the same (legacy cleanup for two historical self-referential trust lines).
     - If the trust line is in its [default state](#11-default-state) after updating it.
     - If the currency code of the IOU is `XRP`.
     - When deleted, the trust line is removed from both accounts' owner directories:
@@ -268,7 +275,7 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
           NoRipple flag (`lsfLowNoRipple` for low account, `lsfHighNoRipple` for high account)
     - If the transaction contains `tfSetfAuth` flag set `lsfLowAuth` for low source account and `lsfHighAuth` for high
       source account.
-    - If `RippleState` will result in a non-default state 
+    - Note: if, after applying the above modifications, the trust line is in its [default state](#11-default-state), it is deleted rather than kept as modified (see deletion conditions above)[^modify-then-delete].
     - If account's parameters in a trust line change to non-default values such that it requires reserve but did not
       before:
         - Set appropriate `lsfLowReserve` or `lsfHighReserve` flag
@@ -283,6 +290,14 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
       - Added to low account's owner directory via `dirInsert`. The page number is stored in `sfLowNode`.
       - Added to high account's owner directory via `dirInsert`. The page number is stored in `sfHighNode`.
       - If either directory is full, the transaction fails with `tecDIR_FULL`.
+    - NoRipple flags are initialized on both sides of the trust line[^trustcreate-noripple]:
+      - The source account's NoRipple flag (`lsfLowNoRipple` or `lsfHighNoRipple`) is set if the TrustSet transaction contains `tfSetNoRipple` and not `tfClearNoRipple`[^trustcreate-noripple-src].
+      - The destination account's NoRipple flag is set if the destination account does **not** have `lsfDefaultRipple` on their account[^trustcreate-noripple-dst]. `lsfDefaultRipple` is an account-level flag set via AccountSet (`asfDefaultRipple`). When an issuer sets `lsfDefaultRipple`, new trust lines are created without NoRipple on the issuer's side, allowing rippling by default.
+
+[^modify-then-delete]: Default state check and deletion after modification: [`SetTrust.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/SetTrust.cpp#L655-L661)
+[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1492-L1509)
+[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1492-L1495)
+[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1505-L1509)
 
 
 - `DirectoryNode` object is **created or modified**:

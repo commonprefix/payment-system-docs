@@ -450,8 +450,8 @@ The base class `DirectStepI` provides[^directstepi-check] common validation that
 - `terNO_ACCOUNT`[^check-no-account]: Source account does not exist
 - `terNO_LINE`[^check-freeze]: Currency is frozen via global freeze, trust line freeze, or LP token freeze (unless this is both first and last step - pure issue/redeem)
 - `tecINTERNAL`[^check-tecinternal]: AMM account exists but AMM ledger entry does not exist (should not happen)
-- `terNO_LINE`[^check-no-ripple-line]: Previous step was a DirectStep but required trust line does not exist for NoRipple check
-- `terNO_RIPPLE`[^check-no-ripple]: Previous step was a DirectStep and NoRipple flag prevents rippling
+- `terNO_LINE`[^check-no-ripple-line]: The previous step is also a DirectStep (two consecutive DirectSteps). `checkNoRipple` reads the two trust lines that connect to the intermediate account (the source of the current step): one from the source of the previous step and one to the destination of the current step. This check fails if either trust line does not exist.
+- `terNO_RIPPLE`[^check-no-ripple]: The previous step is also a DirectStep and the intermediate account has NoRipple set on **both** trust lines. If either trust line has NoRipple cleared on the intermediate account's side, rippling is allowed and this check passes.
 - `temBAD_PATH_LOOP`[^check-bad-path-loop-book][^check-bad-path-loop-seen]: Path loop detected (same issue appears multiple times in invalid pattern)
 
 [^check-bad-path-null]: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L852)

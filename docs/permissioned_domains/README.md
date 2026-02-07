@@ -9,7 +9,7 @@
         - [2.1.3. Pseudo-accounts](#213-pseudo-accounts)
         - [2.1.4. Ownership](#214-ownership)
         - [2.1.5. Reserves](#215-reserves)
-    - [2.2. Offer Ledger Entry](#22-offer-ledger-entry-extensions)
+    - [2.2. Offer Ledger Entry](#22-offer-ledger-entry)
         - [2.2.1. Domain Field](#221-domain-field)
         - [2.2.2. Hybrid Offer Fields](#222-hybrid-offer-fields)
             - [2.2.2.1. Flags](#2221-flags)
@@ -135,7 +135,7 @@ Creates a new PermissionedDomain (when DomainID is omitted) or updates an existi
 ### 3.1.1. Failure Conditions
 
 **Static validation**:
-- `temDISABLED`: featurePermissionedDomains not enabled
+- `temDISABLED`: featurePermissionedDomains or featureCredentials not enabled
 - `temARRAY_EMPTY`: AcceptedCredentials array is empty
 - `temARRAY_TOO_LARGE`: AcceptedCredentials exceeds 10 entries
 - `temINVALID_ACCOUNT_ID`: AcceptedCredentials contains invalid issuer account id
@@ -185,6 +185,7 @@ Deletes a PermissionedDomain. Only the domain owner can delete their domain.
 ### 3.2.1. Failure Conditions
 
 **Static validation**:
+- `temDISABLED`: featurePermissionedDomains not enabled
 - `temMALFORMED`: DomainID is all zeros
 
 **Validation against the ledger view**:

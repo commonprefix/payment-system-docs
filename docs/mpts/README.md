@@ -14,8 +14,9 @@
         - [2.2.1. Object Identifier](#221-object-identifier)
         - [2.2.2. Fields](#222-fields)
             - [2.2.2.1. Flags](#2221-flags)
-        - [2.2.3. Ownership](#223-ownership)
-        - [2.2.4. Reserves](#224-reserves)
+        - [2.2.3. Pseudo-accounts](#223-pseudo-accounts)
+        - [2.2.4. Ownership](#224-ownership)
+        - [2.2.5. Reserves](#225-reserves)
 - [3. Transactions](#3-transactions)
     - [3.1. MPTokenIssuanceCreate Transaction](#31-mptokenissuancecreate-transaction)
         - [3.1.1. Failure Conditions](#311-failure-conditions)
@@ -85,8 +86,8 @@ classDiagram
     class MPToken {
         +AccountID Account
         +uint192 MPTokenIssuanceID
-        +int64 MPTAmount
-        +int64 LockedAmount
+        +uint64 MPTAmount
+        +uint64 LockedAmount
         +uint64 OwnerNode
         +uint32 Flags
     }
@@ -287,7 +288,7 @@ The `MPTokenIssuanceCreate` transaction creates a new MPT issuance with specifie
 | `TransactionType` | :heavy_check_mark: |    `No`     |        `String`        |   `UInt16`    |               | Must be `"MPTokenIssuanceCreate"`                                                                                                    |
 | `Account`         | :heavy_check_mark: |    `No`     |        `String`        |  `AccountID`  |               | Account creating the issuance (becomes the issuer)                                                                                   |
 | `AssetScale`      |                    |    `No`     |        `Number`        |    `UInt8`    |      `0`      | Number of decimal places for display (0-19). Specifies how many decimal places the MPT can be subdivided.                            |
-| `TransferFee`     |                    |    `No`     |        `Number`        |   `UInt16`    |      `0`      | Transfer fee in basis points (0-50000 inclusive, representing 0.000%-50.000%). Must not be present if `tfMPTCanTransfer` is not set. |
+| `TransferFee`     |                    |    `No`     |        `Number`        |   `UInt16`    |      `0`      | Transfer fee in tenths of a basis point (0-50000 inclusive, representing 0%-50%). Must not be present if `tfMPTCanTransfer` is not set. |
 | `MaximumAmount`   |                    |    `No`     |   `String - Number`    |   `UInt64`    |               | Maximum supply cap. Valid range: 1 to 2^63-1.                                                                                        |
 | `MPTokenMetadata` |                    |    `No`     | `String - Hexadecimal` |    `Blob`     |               | Arbitrary metadata (1-1024 bytes). By convention, should decode to JSON describing what the MPT represents.                          |
 | `DomainID`        |                    |    `No`     | `String - Hexadecimal` |   `UInt256`   |               | Permissioned domain identifier (requires amendments)                                                                                 |
@@ -329,8 +330,9 @@ These flags control whether the corresponding capability flags can be changed af
 - `temDISABLED`: 
   - [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
   - `DomainID` is specified but amendments not enabled (requires both [PermissionedDomains](https://xrpl.org/resources/known-amendments#permissioneddomains) and [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault))
-- `temINVALID_FLAG`: Invalid flags specified
-- `temBAD_TRANSFER_FEE`: `TransferFee` exceeds 50000 basis points (50%)
+  - `MutableFlags` is specified but [DynamicMPT](https://xrpl.org/resources/known-amendments#dynamicmpt) amendment is not enabled
+- `temINVALID_FLAG`: Invalid flags or `MutableFlags` specified
+- `temBAD_TRANSFER_FEE`: `TransferFee` exceeds 50000 (50%)
 - `temMALFORMED`:
   - `TransferFee` is non-zero but `tfMPTCanTransfer` is not set
   - `DomainID` is specified but is zero (must omit field if not using domains)
@@ -344,8 +346,8 @@ These flags control whether the corresponding capability flags can be changed af
 
 - `tecINSUFFICIENT_RESERVE`: Account has insufficient XRP balance to cover the reserve for creating the issuance (one owner reserve required)
 - `tecDIR_FULL`: Owner directory is full and cannot accommodate the new issuance
-- `tecINTERNAL`: Signing account does not exist 
-- 
+- `tecINTERNAL`: Signing account does not exist
+
 ### 3.1.2. State Changes
 
 - `MPTokenIssuance` object is **created**:
@@ -477,16 +479,24 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 [^mptissuanceset-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L11-L16), [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L19-L22), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L49-L122)
 
-- `temDISABLED`: 
+- `temDISABLED`:
   - [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
-  `DomainID` specified but amendments not enabled (requires [PermissionedDomains](https://xrpl.org/resources/known-amendments#permissioneddomains) and [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault))
-- `temMALFORMED`: 
+  - `DomainID` specified but amendments not enabled (requires [PermissionedDomains](https://xrpl.org/resources/known-amendments#permissioneddomains) and [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault))
+  - Mutation fields (`MutableFlags`, `MPTokenMetadata`, or `TransferFee`) specified but [DynamicMPT](https://xrpl.org/resources/known-amendments#dynamicmpt) amendment is not enabled
+- `temMALFORMED`:
   - Both `DomainID` and `Holder` specified (mutually exclusive)
   - `Account` equals `Holder` (cannot lock own MPToken)
-  - With [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault), must specify at least one of: `tfMPTLock`, `tfMPTUnlock`, or `DomainID` (transaction must change something)
-- `temINVALID_FLAG`: 
+  - With [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault) or [DynamicMPT](https://xrpl.org/resources/known-amendments#dynamicmpt), must specify at least one of: `tfMPTLock`, `tfMPTUnlock`, `DomainID`, or mutation fields (transaction must change something)
+  - `Holder` field present with mutation fields (mutually exclusive)
+  - Transaction flags set with mutation fields (cannot lock/unlock while mutating)
+  - `MPTokenMetadata` exceeds 1024 bytes
+  - Non-zero `TransferFee` with `tmfMPTClearCanTransfer` in the same transaction
+- `temINVALID_FLAG`:
   - Both `tfMPTLock` and `tfMPTUnlock` specified
   - Invalid flags specified
+  - `MutableFlags` is zero or contains invalid flags
+  - `MutableFlags` sets and clears the same capability flag
+- `temBAD_TRANSFER_FEE`: `TransferFee` exceeds 50000 (50%)
 
 **Validation against the ledger view**[^mptissuanceset-preclaim-validation]
 
@@ -525,7 +535,9 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
   - If `MPTokenMetadata` present: Update `MPTokenMetadata` field
   - If `TransferFee` present: Update `TransferFee` field
   - If `MutableFlags` present with set flags: Set corresponding capability flags (e.g., `tmfMPTSetCanTrade` sets `lsfMPTCanTrade`)
-  - If `MutableFlags` present with clear flags: Clear corresponding capability flags (e.g., `tmfMPTClearCanTrade` clears `lsfMPTCanTrade`)
+  - If `MutableFlags` present with clear flags: Clear corresponding capability flags (e.g., `tmfMPTClearCanTrade` clears `lsfMPTCanTrade`). Clearing `lsfMPTCanTransfer` via `tmfMPTClearCanTransfer` also clears the `TransferFee` field.[^clear-cantransfer-clears-transferfee]
+
+[^clear-cantransfer-clears-transferfee]: Clearing `lsfMPTCanTransfer` clears `TransferFee`: [`MPTokenIssuanceSet.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L286-L291)
 
 **When `Holder` is specified** (modifying `MPToken`):
 
@@ -589,7 +601,7 @@ The `MPTokenAuthorize` transaction manages `MPToken` entries and authorization. 
   - `tefINTERNAL`: `MPTokenIssuance` does not exist (and `MPToken` has a positive balance or locked amount)
   - `tecHAS_OBLIGATIONS`: 
     - `MPTAmount` is non-zero (cannot delete with balance)
-    `LockedAmount` is non-zero (cannot delete with locked MPTs)
+    - `LockedAmount` is non-zero (cannot delete with locked MPTs)
   - With [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault): `tecNO_PERMISSION`: `MPToken` is individually locked
 - If NOT `tfMPTUnauthorize`:
   - `tecOBJECT_NOT_FOUND`: `MPTokenIssuance` does not exist 

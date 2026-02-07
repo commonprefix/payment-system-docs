@@ -40,6 +40,7 @@ For example, a trading venue creates a PermissionedDomain requiring an "accredit
 Credentials can also be used for DepositAuth (enabling payments from credential holders without individual preauthorization), self-issued authorization markers (issuer == subject), and tiered access control (different credential types representing different authorization levels from the same issuer).
 
 [^1]: W3C Verifiable Credentials Data Model: https://www.w3.org/TR/vc-data-model-2.0/
+[^2]: For self-issued credentials (issuer == subject), the credential appears in only one directory, so SubjectNode is not set. sfSubjectNode defined as soeOPTIONAL: [`ledger_entries.macro`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/detail/ledger_entries.macro#L443). SubjectNode only set in the issuer != subject branch: [`Credentials.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Credentials.cpp#L156-L168)
 
 ## 1.1. Terminology and Concepts
 
@@ -126,7 +127,7 @@ This ensures each credential is uniquely identified by its (subject, issuer, typ
 | `CredentialType`    | Blob      | Yes      | Type identifier string (max 64 bytes)                     |
 | `Expiration`        | UInt32    | Optional | Unix timestamp when credential expires                    |
 | `URI`               | Blob      | Optional | Reference URI for credential metadata (max 256 bytes)     |
-| `SubjectNode`       | UInt64    | Yes      | Index of the subject's owner directory page               |
+| `SubjectNode`       | UInt64    | Optional | Index of the subject's owner directory page (only present when issuer != subject)[^2] |
 | `IssuerNode`        | UInt64    | Yes      | Index of the issuer's owner directory page                |
 | `Flags`             | UInt32    | Optional | Credential flags (see below)                              |
 | `PreviousTxnID`     | Hash256   | Yes      | Hash of the previous transaction that modified this entry |
@@ -141,8 +142,11 @@ The `Flags` field can contain the following values:
 | `lsfAccepted` | `0x00010000` | The subject has accepted this credential and it is now active |
 
 **Flag Behavior**:
-- When `lsfAccepted` is not set: The credential exists but has not been accepted by the subject. It cannot be used for authorization and exists only in the issuer's owner directory.
+- When `lsfAccepted` is not set: The credential exists but has not been accepted by the subject. It cannot be used for authorization. It appears in both the issuer's and subject's owner directories, but only the issuer's owner count is incremented (the issuer pays the reserve).[^3]
 - When `lsfAccepted` is set: The credential has been accepted and is active. It appears in both the issuer's and subject's owner directories and can be used for authorization.
+
+[^3]: Credential added to both directories during creation: [`Credentials.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Credentials.cpp#L137-L169)
+[^4]: Deletion authorization: [`Credentials.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Credentials.cpp#L244-L249)
 - Self-issued credentials (issuer == subject) automatically have `lsfAccepted` set during creation.
 
 ### 2.1.3. Pseudo-accounts
@@ -197,8 +201,9 @@ The `CredentialCreate` transaction creates a new credential from an issuer to a 
 
 **Static validation:**
 
+- `temDISABLED`: featureCredentials not enabled
 - `temMALFORMED`:
-  - `Subject` field is not present
+  - `Subject` is a zero AccountID
   - `CredentialType` is empty or exceeds 64 bytes
   - `URI` is empty or exceeds 256 bytes
 
@@ -252,7 +257,8 @@ The `CredentialAccept` transaction allows a subject to accept a credential that 
 
 **Static validation:**
 
-- `temINVALID_ACCOUNT_ID`: `Issuer` field is not present
+- `temDISABLED`: featureCredentials not enabled
+- `temINVALID_ACCOUNT_ID`: `Issuer` is a zero AccountID
 - `temMALFORMED`: `CredentialType` is empty or exceeds 64 bytes
 
 **Validation against the ledger view:**
@@ -300,7 +306,7 @@ The `CredentialDelete` transaction removes a credential from the ledger.
 
 **Deletion Authorization**:
 - The issuer can always delete any credential they issued
-- The subject can always delete any credential they hold (if it has `lsfAccepted` flag)
+- The subject can always delete any credential they hold[^4]
 - Anyone can delete an expired credential (when current time > `Expiration`)
 - Others cannot delete active, non-expired credentials
 
@@ -314,6 +320,7 @@ The `CredentialDelete` transaction removes a credential from the ledger.
 
 **Static validation:**
 
+- `temDISABLED`: featureCredentials not enabled
 - `temMALFORMED`:
   - Neither `Subject` nor `Issuer` field is present
   - `CredentialType` is empty or exceeds 64 bytes
@@ -442,7 +449,7 @@ Setup:
 - Alice accepts the credential
 
 Offer Creation:
-1. Alice submits an OfferCreate transaction with the `Domain` field set to Bob's PermissionedDomain ID
+1. Alice submits an OfferCreate transaction with the `DomainID` field set to Bob's PermissionedDomain ID
 2. Ledger checks Bob's PermissionedDomain has credential requirements
 3. Ledger verifies Alice holds credential where:
    - Issuer = Carol

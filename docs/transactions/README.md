@@ -9,14 +9,15 @@
   - [3.2. Preclaim](#32-preclaim)
   - [3.3. DoApply](#33-doapply)
 - [4. Transaction Result Codes](#4-transaction-result-codes)
-  - [4.1. Code Categories](#41-code-categories)
 - [5. Ledger Views and Sandboxes](#5-ledger-views-and-sandboxes)
   - [5.1. Atomic Application](#51-atomic-application)
   - [5.1.1. Conditional Atomicity](#511-conditional-atomicity)
 
 # 1. Introduction
 
-**Note**: Transaction processing in `rippled` is a complex system. This document presents a simplified view focused on providing sufficient context for understanding payment-related documentation. It covers the essential concepts and mechanisms without exhaustively detailing every aspect of transaction processing.
+
+> [!IMPORTANT]
+> N.B.: Transaction processing in `rippled` is a complex system. This document presents a simplified view focused on providing sufficient context for understanding payment-related documentation. It covers the essential concepts and mechanisms without exhaustively detailing every aspect of transaction processing.
 
 Transactions are the mechanism for modifying the XRP Ledger state. New transactions representing user intent enter the network exclusively through RPC submission - clients submit transactions via commands like `submit` or `submit_multisigned` to a `rippled` server. Once a transaction passes initial validation, it is relayed to other nodes through peer-to-peer propagation via `TMTransaction` protocol messages.
 
@@ -172,7 +173,7 @@ classDiagram
         +Application app
         +OpenView view
         +STTx tx
-        +TER ter
+        +TER preclaimResult
     }
 
     class PreflightResult {
@@ -216,28 +217,29 @@ classDiagram
     PreclaimContext --> PreclaimResult : used to create
     ApplyContext --> ApplyResult : used to create
 ```
+*Figure: Simplified Transaction Class Diagram showing payment-related Transactors*
 
 ## 2.2. Processing Flow
 
 Transaction processing follows a three-phase pipeline: preflight (static validation), preclaim (ledger-based validation), and doApply (execution). Each phase can fail and return an error to the client. The `Transactor` base class coordinates this flow by calling into derived transaction classes at specific validation and execution points.
 
-The table below shows all functions called during each phase. The "Implemented By" column indicates whether the function is implemented in `applySteps.cpp` (the top-level orchestrator for each phase), the `Transactor` base class (providing common behavior for all transactions), or the `Derived` transaction-specific class (e.g., `Payment`, `AMMCreate`).
+The table below shows all functions called during each phase. The "Implemented By" column indicates whether the function is implemented in `applySteps.cpp` (the top-level orchestrator for each phase), the `Transactor` base class (providing common behavior for all transactions), or the `Derived` transaction-specific class (e.g., `Payment`, `AMMCreate`). "Transactor (overridable)" means the base class provides a default implementation that derived classes may optionally override.
 
-| Phase         | Function                      | Implemented By | Description                                                              |
-|---------------|-------------------------------|----------------|--------------------------------------------------------------------------|
-| **Preflight** | `invokePreflight<T>()`        | Transactor     | Orchestrates preflight phase: checks tx type feature, calls other checks |
-|               | `checkExtraFeatures()`        | Derived        | Check if optional fields require specific amendments                     |
-|               | `preflight1()`                | Transactor     | Basic validation (account, fee, flags) - calls `preflight0()`            |
-|               | `preflight()`                 | Derived        | **Required override** - transaction-specific static validation           |
-|               | `preflight2()`                | Transactor     | Signature validation                                                     |
-|               | `preflightSigValidated()`     | Derived        | Optional post-signature validation                                       |
-| **Preclaim**  | `invoke_preclaim()`           | applySteps.cpp | Orchestrates preclaim phase                                              |
-|               | `checkSeqProxy()`             | Transactor     | Validate sequence number or ticket                                       |
-|               | `checkPriorTxAndLastLedger()` | Transactor     | Check prior transaction and last ledger sequence                         |
-|               | `checkFee()`                  | Transactor     | Verify sufficient balance for fee                                        |
-|               | `checkPermission()`           | Transactor     | Verify account permissions                                               |
-|               | `checkSign()`                 | Transactor     | Verify signature authorization                                           |
-|               | `preclaim()`                  | Derived        | Transaction-specific ledger-based validation                             |
+| Phase         | Function                      | Implemented By            | Description                                                              |
+|---------------|-------------------------------|---------------------------|--------------------------------------------------------------------------|
+| **Preflight** | `invokePreflight<T>()`        | Transactor                | Orchestrates preflight phase: checks tx type feature, calls other checks |
+|               | `checkExtraFeatures()`        | Transactor (overridable)  | Check if optional fields require specific amendments                     |
+|               | `preflight1()`                | Transactor                | Basic validation (account, fee, flags) - calls `preflight0()`            |
+|               | `preflight()`                 | Derived                   | **Required override** - transaction-specific static validation           |
+|               | `preflight2()`                | Transactor                | Signature validation                                                     |
+|               | `preflightSigValidated()`     | Transactor (overridable)  | Optional post-signature validation                                       |
+| **Preclaim**  | `invoke_preclaim()`           | applySteps.cpp            | Orchestrates preclaim phase                                              |
+|               | `checkSeqProxy()`             | Transactor                | Validate sequence number or ticket                                       |
+|               | `checkPriorTxAndLastLedger()` | Transactor                | Check prior transaction and last ledger sequence                         |
+|               | `checkPermission()`           | Transactor                | Verify account permissions                                               |
+|               | `checkSign()`                 | Transactor                | Verify signature authorization                                           |
+|               | `checkFee()`                  | Transactor                | Verify sufficient balance for fee                                        |
+|               | `preclaim()`                  | Derived                   | Transaction-specific ledger-based validation                             |
 | **Apply**     | `doApply()`                   | applySteps.cpp | Orchestrates apply phase                                                 |
 |               | `operator()()`                | Transactor     | Entry point, exception handling                                          |
 |               | `apply()`                     | Transactor     | Orchestrates doApply flow                                                |
@@ -283,7 +285,7 @@ Preflight validation is orchestrated by `Transactor::invokePreflight<T>()` which
 
 3. **preflight1()**: Account and fee field validation (Transactor base class method)
    - Check `sfTicketSequence` field validity (requires `featureTicketBatch` amendment)
-   - Check `sfDelegate` field validity (requires `featurePermissionDelegation` amendment)
+   - Check `sfDelegate` field validity (requires `featurePermissionDelegationV1_1` amendment)
    - Calls **preflight0()** internally for early sanity checks:
      - Verify transaction ID is not zero
      - Verify NetworkID matches (for networks > 1024)
@@ -374,7 +376,7 @@ Transactions that fail preclaim may or may not be added to the ledger depending 
 **Context**: ApplyContext
 - `app`: Application instance
 - `tx`: Transaction being executed
-- `ter`: Result from preclaim
+- `preclaimResult`: Result from preclaim
 - `view()`: Writable ledger view (OpenView)
 
 **Execution flow**:
@@ -411,18 +413,18 @@ Transactions that fail preclaim may or may not be added to the ledger depending 
 
 # 4. Transaction Result Codes
 
-## 4.1. Code Categories
-
 Transaction result codes (TER) are categorized by prefix and meaning:
 
 | Prefix  | Range        | Meaning                                                                            | Fee Claimed | Included in Ledger |
 |---------|--------------|------------------------------------------------------------------------------------|-------------|--------------------|
 | **tel** | -399 to -300 | Local error - should not be relayed                                                | No          | No                 |
 | **tem** | -299 to -200 | Malformed transaction - permanent failure                                          | No          | No                 |
-| **tef** | -199 to -100 | Failed to apply - permanent failure                                                | No          | No                 |
+| **tef** | -199 to -100 | Failed to apply - not retried, but could succeed under different ledger state[^tef] | No          | No                 |
 | **ter** | -99 to -1    | Temporary failure that will be retried by the server that returned the result code | No          | No                 |
 | **tes** | 0            | Success                                                                            | Yes         | Yes                |
 | **tec** | 100+         | Claimed fee - failed but fee charged                                               | Yes         | Yes                |
+
+[^tef]: tef characterization from source comments: [`TER.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/TER.h#L136-L147)
 
 # 5. Ledger Views and Sandboxes
 
@@ -473,7 +475,7 @@ sle->setFieldU32(sfSequence, 100);
 sb.update(sle);
 
 // Apply all changes atomically
-sb.apply(ctx.rawView);
+sb.apply(ctx.rawView());
 
 // OR: discard by letting sb go out of scope
 ```
@@ -493,19 +495,19 @@ PaymentSandbox maintains two tracking systems:
    - Any other ledger entry modifications
 
 2. **Deferred credits table (`tab_`)**: Tracks metadata for query purposes during transaction execution:
-   - Pending credits (for XRP, tokens, and MPTs)
+   - Credits, debits, self-debits, and original balances (for XRP, tokens, and MPTs)
    - Maximum owner count seen per account
 
 **Hooks for Balance Management:**
 
-PaymentSandbox provides separate hooks for IOUs (XRP and tokens) and MPTs:
+Accounts in a payment are not allowed to use assets acquired during that payment. Balance hooks are virtual methods declared on ReadView and ApplyView that PaymentSandbox overrides to enforce this rule. When the flow engine queries an account's balance (e.g., via `accountHolds` or `xrpLiquid`), the balance hook subtracts newly acquired credits, so subsequent steps see only the pre-payment balance. Credit hooks record each transfer into `tab_` so the balance hooks have the data they need. There are separate hooks for IOUs (XRP and tokens) and MPTs:
 
 **IOU Hooks (XRP and Tokens):**
-- `balanceHookIOU(account, issuer, amount)`: Returns balance minus pending credits tracked in `tab_`
+- `balanceHookIOU(account, issuer, amount)`: Returns the usable balance, adjusted so that newly acquired assets are not counted[^balanceHook]
 - `creditHookIOU(from, to, amount, preCreditBalance)`: Records IOU credits in `tab_` for later querying
 
 **MPT Hooks:**
-- `balanceHookMPT(account, issue, amount)`: Returns MPT balance minus pending credits tracked in `tab_`
+- `balanceHookMPT(account, issue, amount)`: Returns the usable MPT balance, adjusted so that newly acquired assets are not counted
 - `balanceHookSelfIssueMPT(issue, amount)`: Returns issuer's self-debit balance for MPT
 - `creditHookMPT(from, to, amount, preCreditBalanceHolder, preCreditBalanceIssuer)`: Records MPT credits in `tab_` for later querying
 - `issuerSelfDebitHookMPT(issue, amount, preCreditBalance)`: Records issuer self-debit operations in `tab_`
@@ -548,36 +550,28 @@ PaymentSandbox nested (strand-level changes)
 
 ## 5.1. Atomic Application
 
-When apply() is called:
-1. All accumulated changes are validated
-2. Changes are pushed to parent view in a single operation
-3. Parent can be another Sandbox (staged commit) or RawView (final commit)
+When `apply()` is called, all accumulated changes are pushed to the parent view by iterating over modified entries and applying each one. The parent can be another Sandbox (staged commit) or a RawView (final commit).
 
-If a sandbox is destroyed without calling apply(), all changes are discarded.
+The atomicity guarantee is RAII-based: either `apply()` is called and all buffered changes propagate to the parent, or the sandbox is destroyed without calling `apply()` and all changes are discarded.
 
 ### 5.1.1. Conditional Atomicity
 
-Conditional atomicity allows transactions to prepare multiple potential outcomes and commit only one based on the result. This pattern is essential when a transaction must always charge a fee but should only apply state changes on success. By creating separate sandboxes for success and failure paths, both branching from a common base sandbox (containing the fee payment), the transaction can selectively apply the appropriate set of changes atomically. This ensures that either all changes for success are committed together, or only the fee payment is committed on failure, maintaining consistency without requiring complex rollback logic.
+Conditional atomicity allows transactions to prepare multiple potential outcomes and commit only one based on the result. By creating two parallel sandboxes on the same parent view, the transaction can work on both a success path and a failure path simultaneously, then selectively apply only the appropriate one[^conditional-atomicity].
 
 ```c++
-// Base view - always contains fee payment
-Sandbox sbBase(&ctx.view());
-payFee(sbBase, fee);
+// Create two parallel sandboxes on the same parent view
+Sandbox sb(&ctx_.view());       // success path
+Sandbox sbCancel(&ctx_.view()); // failure path (e.g., cleanup only)
 
-// Success path - contains all state changes
-Sandbox sbSuccess(&sbBase);
-// ... make changes to sbSuccess ...
+auto const result = applyGuts(sb, sbCancel);
 
-// Failure path - only fee payment (from sbBase)
-Sandbox sbFailure(&sbBase);
-// ... minimal cleanup in sbFailure ...
-
-// Apply appropriate sandbox based on outcome
-if (success) {
-    sbSuccess.apply(sbBase);
-    sbBase.apply(ctx.rawView());
-} else {
-    sbFailure.apply(sbBase);
-    sbBase.apply(ctx.rawView());
-}
+// Apply only the appropriate sandbox
+if (result.second)
+    sb.apply(ctx_.rawView());
+else
+    sbCancel.apply(ctx_.rawView());
 ```
+
+[^conditional-atomicity]: Conditional atomicity pattern in CreateOffer: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L962-L979)
+
+[^balanceHook]: Balance hook description from source comments: [`ReadView.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/ledger/ReadView.h#L153-L157)

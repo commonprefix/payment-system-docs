@@ -3,7 +3,7 @@
 - [1. Introduction](#1-introduction)
     - [1.1. Offers](#11-offers)
     - [1.2. Offer Crossing](#12-offer-crossing)
-        - [1.2.1. Sell And Buy Offers](#121-sell-and-buy-offers)
+        - [1.2.1. Sell vs Buy Offers](#121-sell-vs-buy-offers)
         - [1.2.2. Auto-bridging](#122-auto-bridging)
         - [1.2.3. Creating the Residual Offer](#123-creating-the-residual-offer)
     - [1.3. Rate Calculation](#13-rate-calculation)
@@ -16,7 +16,9 @@
     - [2.1. Offer Ledger Entry](#21-offer-ledger-entry)
         - [2.1.1. Object Identifier](#211-object-identifier)
         - [2.1.2. Fields](#212-fields)
-            - [2.1.2.1. Flags](#2121-flags)
+            - [2.1.2.1. Asset-Specific Fields](#2121-asset-specific-fields)
+            - [2.1.2.2. Domain-Specific Fields](#2122-domain-specific-fields)
+            - [2.1.2.3. Flags](#2123-flags)
         - [2.1.3. Pseudo-accounts](#213-pseudo-accounts)
         - [2.1.4. Ownership](#214-ownership)
         - [2.1.5. Reserves](#215-reserves)
@@ -289,7 +291,7 @@ concatenated in order:
 Fields are described
 in [Offer Fields](https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/offer#offer-fields)
 
-#### 2.1.2.2. Asset-Specific Fields
+#### 2.1.2.1. Asset-Specific Fields
 
 Offers can involve three types of assets, each using different fields for identification:
 
@@ -305,7 +307,7 @@ Offers can involve three types of assets, each using different fields for identi
 
 An offer stores only the fields relevant to its asset types. All combinations of XRP, IOUs, and MPTs are supported.
 
-#### 2.1.2.3. Domain-Specific Fields
+#### 2.1.2.2. Domain-Specific Fields
 
 **DomainID** (UInt256, optional): The domain identifier for domain offers and hybrid offers. When present, the offer is placed in the domain's order book.
 
@@ -315,7 +317,7 @@ An offer stores only the fields relevant to its asset types. All combinations of
 
 This field allows hybrid offers to be discovered and consumed by both domain and open order book traversals.
 
-#### 2.1.2.1. Flags
+#### 2.1.2.3. Flags
 
 Flags are described
 in [Offer Flags](https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/offer#offer-flags)
@@ -344,18 +346,16 @@ This special behavior allows offers to succeed if they provide immediate value t
 
 **Book Directory Root Page (Page 0)**:
 
-The first 192 bits are the first 192 bits of [SHA512-Half](https://xrpl.org/docs/references/protocol/data-types/basic-data-types#hashes) of the following values, concatenated in order:
+The first 192 bits are the first 192 bits of [SHA512-Half](https://xrpl.org/docs/references/protocol/data-types/basic-data-types#hashes) of the following values, concatenated in order.[^book-dir-hash] The exact concatenation order depends on the asset types involved:
 
-- The Book directory space key (`0x0042`)
-- The `takerPays` asset identifier:
-  - For IOUs: currency code + issuer account
-  - For MPTs: MPT ID (192 bits)
-  - For XRP: currency code (160 bits of zeros for issuer)
-- The `takerGets` asset identifier:
-  - For IOUs: currency code + issuer account
-  - For MPTs: MPT ID (192 bits)
-  - For XRP: currency code (160 bits of zeros for issuer)
-- The `domainID` (if present, for permissioned domains)
+- **IOU + IOU** (includes XRP): `BOOK_DIR`, `takerPays` currency, `takerGets` currency, `takerPays` issuer, `takerGets` issuer, [`domainID`]
+- **IOU + MPT**: `BOOK_DIR`, `takerPays` currency, `takerGets` MPT ID, `takerPays` issuer, [`domainID`]
+- **MPT + IOU** (includes XRP): `BOOK_DIR`, `takerPays` MPT ID, `takerGets` currency, `takerGets` issuer, [`domainID`]
+- **MPT + MPT**: `BOOK_DIR`, `takerPays` MPT ID, `takerGets` MPT ID, [`domainID`]
+
+The Book directory space key (`BOOK_DIR`) is `0x0042`. For XRP, the currency code is 160 bits of zeros and the issuer is 160 bits of zeros. The `domainID` is included only when specified (for permissioned domains).
+
+[^book-dir-hash]: Book directory hash computation: [`Indexes.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Indexes.cpp#L96-L143)
 
 The last 64 bits encode the exchange rate (`takerPays / takerGets`) as a 64-bit value in big-endian format.
 
@@ -464,7 +464,7 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
     - both `takerPays` and `takerGets` are XRP amounts.
     - either `takerPays` or `takerGets` have value `0`.
 - `temREDUNDANT`: `takerPays` and `takerGets` are the same asset
-- `temBAD_CURRENCY`: `currency` field in `LimitAmount` is `XRP`. 
+- `temBAD_CURRENCY`: either `takerPays` or `takerGets` is a non-native asset that uses the XRP currency code.
 - `temBAD_ISSUER`: either `takerPays` or `takerGets` contain either an XRP with issuer ID, or an IOU without an issuer ID.
 
 **Validation against the ledger view:**
@@ -480,23 +480,17 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
   - `takerPays` issuer account does not exist:
       - `terNO_ACCOUNT`: `tapRETRY` enabled
       - `tecNO_ISSUER`: `tapRETRY` is not enabled.
-  - `takerPays` issuer account has a flag `lsfRequireAuth` and there is no trust line between signing account and the
-    issuer account:
+  - `takerPays` issuer account has a flag `lsfRequireAuth` and there is no trust line between signing account and the issuer account:
       - `terNO_LINE`: `tapRETRY` enabled
       - `tecNO_LINE`: `tapRETRY` is not enabled.
-  - `takerPays` issuer account has a flag `lsfRequireAuth` and there a trust line between signing account and the
-    issuer account, but it is not authorized:
-      - `terNO_LINE`: `tapRETRY` enabled
-      - `tecNO_LINE`: `tapRETRY` is not enabled.
+  - `takerPays` issuer account has a flag `lsfRequireAuth` and there is a trust line between signing account and the issuer account, but it is not authorized:[^checkAcceptAsset-noauth]
+      - `terNO_AUTH`: `tapRETRY` enabled
+      - `tecNO_AUTH`: `tapRETRY` is not enabled.
   - `tecFROZEN`: trust line between signing account and the `takerPays` issuer account is deeply frozen, either on low or high
     side.
-- `takerPays` is an MPT and the signing account is not authorized to hold the MPT:
-    - `terNO_AUTH`: `tapRETRY` enabled
-    - `tecNO_AUTH`: `tapRETRY` is not enabled.
-    - Authorization is checked via `lsfMPTAuthorized` flag on the holder's MPToken, or through valid domain credentials if the MPTokenIssuance has a DomainID set. See [DomainID and Authorization](../mpts/README.md#11-domainid-and-authorization) for details.
+- `tecNO_AUTH`: `takerPays` is an MPT and the signing account is not authorized to hold the MPT. Authorization is checked via `lsfMPTAuthorized` flag on the holder's MPToken, or through valid domain credentials if the MPTokenIssuance has a DomainID set. See [DomainID and Authorization](../mpts/README.md#11-domainid-and-authorization) for details.[^checkAcceptAsset-mpt-auth]
 - `tecNO_PERMISSION`:
     - `DomainID` is specified but one of the following domain access requirements is not met:
-        - The `featurePermissionedDEX` amendment must be enabled
         - The specified domain must exist
         - The offer creator must be in the domain (either the domain owner or hold a valid accepted credential that is not expired)
     - MPT validation failure (see below)
@@ -505,6 +499,9 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 - `tecLOCKED`: MPT validation failure (see below)
 
 **MPT-specific validations**: When either `takerPays` or `takerGets` is an MPT, the transaction is validated using [`checkMPTDEXAllowed`](../mpts/README.md#361-checkmptdexallowed). See [MPT Validation Functions](../mpts/README.md#36-mpt-validation-functions) for complete details on validation logic and error conditions.
+
+[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L286-L287)
+[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L319-L323), [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L2646-L2670)
 
 **Validation during doApply:**
 
@@ -567,7 +564,7 @@ in [OfferCancel Fields](https://xrpl.org/docs/references/protocol/transactions/t
 **Static validation:**
 
 - `temINVALID_FLAG`: one of the specified flags is not one of common transaction flags
-- `temBAD_SEQUENCE`: `OfferSequence` is not supplied in the transaction
+- `temBAD_SEQUENCE`: `OfferSequence` is set to `0`
 
 **Validation against the ledger view:**
 
@@ -577,8 +574,7 @@ in [OfferCancel Fields](https://xrpl.org/docs/references/protocol/transactions/t
 #### 3.1.2.2. State Changes
 
 - `Offer` object is **deleted**:
-    - If the offer with `OfferSequence` sequence number exists.
-    - Any unexecutable offers found during a crossing attempt will be deleted. Refer to [Flow](../flow/README.md) documentation for details.
+    - If the offer with `OfferSequence` sequence number exists. If the offer does not exist, the transaction succeeds without deleting anything.
     - When an offer is deleted via `offerDelete`:
       - The offer is removed from its owner directory using `dirRemove(keylet::ownerDir(owner), sfOwnerNode, offer_index, false)`
       - The offer is removed from its book directory using `dirRemove(keylet::page(book_directory), sfBookNode, offer_index, false)`
