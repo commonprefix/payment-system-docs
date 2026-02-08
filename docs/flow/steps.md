@@ -576,7 +576,7 @@ The function[^directioffercrossingstep-check] has no additional failure conditio
 
 [^xrpendpointstep-revimp]: [`XRPEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/XRPEndpointStep.cpp#L251-L269)
 
-`XRPEndpointStep::revImp`[^xrpendpointstep-revimp] transfers XRP from or to the user account. Uses `xrpAccount()` (a zero-valued sentinel account) as a bookkeeping marker to indicate where XRP enters or exits the payment flow - it's not a real account. If this is the last step (destination), accepts all requested XRP. If this is the first step (source), limits transfer to available balance after accounting for reserves. For offer crossing, reduces owner count by 1 when calculating available balance.
+`XRPEndpointStep::revImp`[^xrpendpointstep-revimp] transfers XRP from or to the user account. Uses `xrpAccount()` (a zero-valued sentinel account) as a bookkeeping marker to indicate where XRP enters or exits the payment flow - it's not a real account. If this is the last step (destination), accepts all requested XRP. If this is the first step (source), limits transfer to available balance after accounting for reserves. For offer crossing, when this is the first step (XRP source) and the trust line or MPToken for the delivered asset does not yet exist, reduces owner count by 1 when calculating available balance.
 
 ### 3.1.1. `revImp` Pseudo-Code
 
@@ -584,7 +584,8 @@ The function[^directioffercrossingstep-check] has no additional failure conditio
 def revImp(sb, afView, ofrsToRm, out: XRPAmount) -> (in: XRPAmount, out: XRPAmount):
     # xrpLiquid calculates available XRP balance accounting for reserves
     # For payment steps: no reserve reduction
-    # For offer crossing steps: reduces owner count by 1 before calculating reserves
+    # For offer crossing steps: if this is the first step and the trust line/MPToken
+    #   for the delivered asset doesn't yet exist, reduces owner count by 1 before calculating reserves
     balance = xrpLiquid(sb)
 
     # If this is the last step (destination), accept all XRP requested
@@ -670,7 +671,7 @@ MPTEndpointStep handles Multi-Purpose Token (MPT) transfers at the source or des
 [^mpt-issuer-check]: [`MPTEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/MPTEndpointStep.cpp#L935-L940)
 [^mpt-debt-direction]: [`MPTEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/MPTEndpointStep.cpp#L480-L488)
 
-For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the redeem step and burned from circulation. See [Direct MPT Payment Execution](../payments/README.md#43-mpt-payment-execution) for detailed holder-to-holder transfer mechanics.
+For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the issuing step (when `qualitiesSrcIssues` sees that the previous step redeemed). See [Direct MPT Payment Execution](../payments/README.md#43-mpt-payment-execution) for detailed holder-to-holder transfer mechanics.
 
 For non-issuer accounts, authorization is validated via `requireAuth`[^mpt-require-auth], which checks the [`lsfMPTRequireAuth`](../mpts/README.md#2121-flags) flag on the issuance and the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken. When the issuance has a [DomainID](../mpts/README.md#11-domainid-and-authorization) set, credentials are validated against that domain. DEX operations validate permissions via [`checkMPTDEXAllowed`](../mpts/README.md#361-checkmptdexallowed), which verifies the [`lsfMPTCanTrade`](../mpts/README.md#2121-flags) flag for DEX usage and checks both issuance-level and holder-level lock flags.
 
@@ -945,7 +946,7 @@ In the actual implementation, both `revImp` and `fwdImp` create lambda functions
 [^revimp-eachoffer]: `revImp` lambda callback creation: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L1039-L1086)
 [^fwdimp-eachoffer]: `fwdImp` lambda callback creation: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L1151-L1249)
 
-Inside `forEachOffer`, the order book directory is traversed[^foreachoffer-traverse] and for each CLOB offer found, `getAMMOffer` is called to generate a competing AMM synthetic offer based on current pool state.[^foreachoffer-getammoffer] The method compares CLOB quality against AMM quality and selects whichever is better. For each selected offer (whether CLOB or AMM), `forEachOffer` calculates the offer amounts accounting for transfer fees and owner funding, then invokes the `eachOffer` callback with the calculated amounts.
+Inside `forEachOffer`, the first CLOB offer is fetched from the order book[^foreachoffer-traverse], then a single AMM synthetic offer is generated if the AMM's spot price can beat the CLOB quality[^foreachoffer-getammoffer] and processed first via the `eachOffer` callback. CLOB offers are then iterated one by one. For each offer (whether AMM or CLOB), `forEachOffer` calculates the offer amounts accounting for transfer fees and owner funding, then invokes the `eachOffer` callback with the calculated amounts.
 
 [^foreachoffer-traverse]: Order book directory traversal via `FlowOfferStream`: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L707-L708)
 [^foreachoffer-getammoffer]: AMM offer generation for each CLOB offer: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L852)
@@ -983,6 +984,13 @@ def revImp(sb, out):
 def forEachOffer(sb, callback):
     offers = OfferStream(sb, book)
 
+    # Try AMM once against best CLOB quality, then iterate CLOB offers
+    ammOffer = getAMMOffer(sb, offers.tipQuality())
+    if ammOffer:
+        stpAmt = applyTransferFees(ammOffer)
+        if callback(ammOffer, stpAmt) == STOP:
+            return
+
     for offer in offers:
         if shouldRemove(offer):
             offers.remove(offer)
@@ -990,11 +998,9 @@ def forEachOffer(sb, callback):
 
         ownerFunds = getOwnerFunds(sb, offer)
         ofrAmt = adjustForFunds(offer, ownerFunds)
-
-        bestOffer = selectBest(offer, getAMMOffer(sb))
         stpAmt = applyTransferFees(ofrAmt)
 
-        if callback(bestOffer, stpAmt) == STOP:
+        if callback(offer, stpAmt) == STOP:
             break
 
 
@@ -1534,9 +1540,9 @@ def getOfrOutRate(prevStep, offerOwner, strandDst, transferRate) -> Rate:
 
 # BookOfferCrossingStep version (conditionally waives fee)
 def getOfrOutRate(prevStep, offerOwner, strandDst, transferRate) -> Rate:
-    # Waive fee if offer owner is strand destination
+    # Waive fee if prevStep is a BookStep and offer owner is strand destination
     # (prevents charging owner to receive their own funds)
-    if strandDst == offerOwner:
+    if prevStep and prevStep.bookStepBook() and strandDst == offerOwner:
         return QUALITY_ONE
     return transferRate
 ```
@@ -1551,11 +1557,10 @@ AMMs are integrated into the payment execution system through `BookStep`, which 
 
 The `BookStep::forEachOffer()` function (see [section 5.3](#53-foreachoffer)) iterates through available liquidity in quality order:
 
-1. Fetch the best offer from the CLOB
-2. If AMM has a chance to provide a better quality than CLOB, generate an AMM offer via `AMMLiquidity::getOffer()`.
-3. Compare qualities
-4. Consume the selected offer and update the state
-5. Repeat until the payment is satisfied or liquidity at appropriate quality is exhausted
+1. Fetch the first valid CLOB offer via `FlowOfferStream`
+2. Generate a single AMM offer via `AMMLiquidity::getOffer()` using the CLOB quality as threshold. If the AMM's spot price can beat it, the AMM offer is consumed first via the callback.
+3. Iterate through CLOB offers one by one, consuming each via the callback
+4. Stop when the callback returns false or the book is exhausted
 
 This interleaving allows AMMs and order books to compete based on quality. When multiple strands are providing liquidity, AMM does not immediately provide full liquidity. As AMM's quality is changing depending on the size, sometimes it can provide better quality the the best CLOB alternative, but sometimes it cannot.    
 
@@ -1627,7 +1632,7 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
         offerIn = initialBalances.in * (5 / 20000)
 
         # Calculate output for initial size (with trading fee)
-        offerOut = swapAssetIn(initialBalances, offerIn, tradingFee) # ../amms/helpers.md#311-swapassetin
+        baseOut = swapAssetIn(initialBalances, offerIn, tradingFee) # ../amms/helpers.md#311-swapassetin
 
         # Scale by Fibonacci number for this iteration
         fibonacci = [1, 1, 2, 3, 5, 8, 13, 21 ... 1346269]

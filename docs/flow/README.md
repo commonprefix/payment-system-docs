@@ -6,6 +6,7 @@
   - [1.3. Structure](#13-structure)
 - [2. Terminology and Concepts](#2-terminology-and-concepts)
   - [2.1. Quality](#21-quality)
+  - [2.2. Debt Direction (Redeeming vs Issuing)](#22-debt-direction-redeeming-vs-issuing)
 - [3. Flow](#3-flow)
   - [3.1. flow Pseudo-Code](#31-flow-pseudo-code)
   - [3.2. AMMContext](#32-ammcontext)
@@ -35,6 +36,9 @@
 
 **Flow** is `rippled`'s **Payment Engine**. It is used to evaluate payment paths and execute payments.
 
+> [!NOTE]
+> The usual terminology is **Payment Engine** and **Flow** can be seen as an implementation of the **Payment Engine**. We choose to use term **Flow** here because **Payment Engine** is often colloquially used in wider context to include the wider payment system.
+
 Flow operates on **paths** - potential routes for value to flow from source to destination. These paths are typically discovered by the [pathfinding algorithm](../path_finding/README.md), though they can also be explicitly provided by users or generated for offer crossing.
 
 Flow takes a set of paths and converts them into **strands** - sequences of executable **steps** that move value from source to destination. Flow ranks these strands by [quality](../glossary.md#quality), with higher-quality strands prioritized.
@@ -45,9 +49,9 @@ It supports both exact amount delivery and partial payments, handling all combin
 
 ## 1.1. Strands and Steps
 
-A **strand** is a sequence of **steps** that represents an executable payment route. While [paths](../path_finding/README.md) describe where value can go (accounts and order books), strands describe how to actually move value through those locations.
+A **strand** is the concrete, executable representation of one payment route. While [paths](../path_finding/README.md) describe where value can go (accounts and order books), strands describe how to actually move value through those locations.
 
-**Steps** execute the operations needed to move value along a payment route. Each step either transfers assets between accounts through trust lines, converts currencies by consuming order book liquidity, or handles XRP/MPT transfers at the payment's source or destination.
+Each **step** is a unit of routing logic. They execute the operations needed to move value along a payment route. Steps transfer IOUs between accounts through trust lines, convert currencies by consuming order book liquidity, or handle XRP/MPT transfers at the payment's source or destination.
 
 - **[DirectStepI](steps.md#2-directstepi)** - Transfers tokens between accounts via trust lines
 - **[XRPEndpointStep](steps.md#3-xrpendpointstep)** - Transfers XRP to/from source or destination
@@ -89,12 +93,14 @@ flowchart LR
 
 Flow executes payments by converting paths into executable strands and consuming liquidity from the best-quality strands until the payment is complete. We'll illustrate the algorithm using an example: Alice wants to send up to 300 USD and Bob should receive 250 EUR.
 
+This example uses "quality", which is effectivelly the exchange rate including transfer rates and fees. Note that quality is stored as in/out, so lower values are better, but the codebase inverts its comparison operators to make "higher quality" mean "better deal". See [Quality Representation](#21-quality) for details on how this works and the potential confusion it introduces. Composite quality is the product of qualities for all steps along the strand.
+
 **Setup:**
 - Alice has 1000 USD with USD Issuer
 - Bob has trust line to EUR Issuer
 - Available liquidity:
-  - Path 1: USD->EUR via one order book (100 USD / 102 EUR). Quality is 1.02. 
-  - Path 2: USD->XRP->EUR via two order books (100 USD / 100 XRP and 105 XRP / 100 EUR). Composite quality is 1.05.
+  - Path 1: USD->EUR via one order book (102 USD / 100 EUR). Quality is 1.02. 
+  - Path 2: USD->XRP->EUR via two order books (100 USD / 100 drops and 106 drops / 100 EUR). Composite quality is 1.06.
   - Path 3: USD->MPT->EUR via two order books (104 USD / 100 MPT and 100 MPT / 100 EUR). Composite quality is 1.04.
   
 - [Path finding](../path_finding/README.md) returns:
@@ -154,22 +160,26 @@ A path is a sequence of **locations** (accounts and order books), while a strand
 
 **Step 3: Step Validation**
 
-Flow validates each step in every strand using the step's `check()` method. This ensures the step's structure is valid - for example, that required accounts exist, no loops are present, and authorization requirements are met. Each step type has different validation requirements. See [steps documentation: check implementation](steps.md#215-check-implementation-base-class) for details.
+Flow validates each step in every strand using the step's `check()` method to ensure it is valid. For example, that required accounts exist, no loops are present, and authorization requirements are met. Each step type has different validation requirements. See [steps documentation: check implementation](steps.md#215-check-implementation-base-class) for details.
 
 For this example, all steps pass validation. If any step failed validation, the entire strand would be discarded.
 
 **Step 4: Iterative Strand Evaluation**
 
-Flow iteratively consumes liquidity from the best-quality strands. Each strand is evaluated using a **two-pass method**: 
+Each strand is evaluated using a **two-pass method**:
 
-The reverse pass works backwards from destination to source, calculating how much input is needed to deliver the desired output. If any step cannot provide the requested output (becoming a "limiting step"), the pass clears the sandbox (discarding all state changes), re-executes that limiting step with clean state, and then continues the reverse pass backwards through the remaining steps (those before the limiting step) using the limiting step's actual (reduced) output.
+Payments specify a desired output amount to deliver to the destination. To determine how much input that requires, the engine must work backward from the destination through each step. But during this backward walk, a step may discover it cannot deliver the full requested amount. The steps already computed (those closer to the destination) assumed the full amount would flow and made state changes accordingly, so those must be discarded. After re-executing the bottleneck step with the reduced amount, a forward walk recalculates the actual outputs for the remaining steps downstream.
 
-The forward pass executes if a limiting step was found. It runs forward from the step after the limiting step to the destination, recalculating outputs based on the actual available liquidity from the limiting step. This ensures steps after the limiting step have correct values with limited input.
+The **reverse pass** works backwards from destination to source, calculating how much input is needed to deliver the desired output. If any step cannot provide the requested output (becoming a "limiting step"), the pass clears the sandbox (discarding all state changes), re-executes that limiting step with clean state, and then continues the reverse pass backwards through the remaining steps (those before the limiting step) using the limiting step's actual (reduced) output.
+
+The **forward pass** executes if a limiting step was found. It runs forward from the step after the limiting step to the destination, recalculating outputs based on the actual available liquidity from the limiting step. This ensures steps after the limiting step have correct values with limited input.
+
+If the first step, during the reverse pass consumes more than how much the strand is allowed to spend, it is reexecuted in the forward direction since the limit is coming from the input side.
 
 In each iteration, the quality of a strand is computed. The quality is presented from the point of view of user "taking". So, if taker needs to pay 90 EUR to get 100 USD, the quality is 0.9, which is better. If the taker needs to pay 110 EUR to get 100 USD, the quality is 1.1, which is worse.
 
 *Iteration 1:*
-- Rank strands by quality: Strand 1 (1.02) is better than Strand 3 (1.04), which is better than Strand 2 (1.05).
+- Rank strands by quality: Strand 1 (1.02) is better than Strand 3 (1.04), which is better than Strand 2 (1.06).
 - Select Strand 1 (best quality for the taker) to evaluate.
 - The last step will provide full liquidity - Issuer can send all 250 EUR to Bob.
 - The BookStep however can only provide 100 EUR for 102 USD. This is a limiting step. 
@@ -178,8 +188,8 @@ In each iteration, the quality of a strand is computed. The quality is presented
 - Update: Delivered 100 EUR total, 150 EUR remaining
 
 *Iteration 2:*
-- Remaining strands: Strand 3 (1.04), Strand 2 (1.05)
-- Rank strands by quality: Strand 3 (1.04) is better than Strand 2 (1.05).
+- Remaining strands: Strand 3 (1.04), Strand 2 (1.06)
+- Rank strands by quality: Strand 3 (1.04) is better than Strand 2 (1.06).
 - Select Strand 3 (best quality) to evaluate.
 - The last step will provide full liquidity - Issuer can deliver the requested 150 EUR to Bob.
 - The second BookStep, however, can only provide 100 EUR for 100 of its input currency - this becomes the limiting step.
@@ -188,12 +198,12 @@ In each iteration, the quality of a strand is computed. The quality is presented
 - Update: Delivered 100 EUR more, 50 EUR remaining.
 
 *Iteration 3:*
-- Rank strands by quality: only Strand 2 (1.05, via XRP bridge) remains active.
+- Rank strands by quality: only Strand 2 remains active.
 - Select Strand 2 (only strand) to evaluate.
 - The last step (Direct to Bob) can deliver the full 50 EUR to Bob.
-- The BookStep (XRP -> EUR) has an offer quality of 1.05 and limits the strand; it can provide 50 EUR out for 53 XRP in (after `limitStepOut` adjustment).
+- The BookStep (XRP -> EUR) provides 50 EUR out for 53 drops in (quality 1.06). No step is limiting - the strand has sufficient capacity.
 - The previous BookStep (USD -> XRP) and Direct step each supply 53 of their respective inputs to feed the path.
-- Strand 2 delivers 50 EUR at a cost of 53 USD (quality 1.05).
+- Strand 2 delivers 50 EUR at a cost of 53 USD (quality 1.06).
 - Update: Delivered final 50 EUR, payment complete.
 
 All 250 EUR were delivered, for a total cost of 259 USD.
@@ -239,13 +249,18 @@ flowchart LR
 - **[toStrands](#4-tostrands)** is a function that converts a set of paths into strands, by calling `toStrand` on each one.
 - **[toStrand](#5-tostrand)** converts a single path to a strand through [path normalization](#51-path-normalization), [path to strand conversion](#52-path-to-strand-conversion), and [step generation](#53-step-generation)
 - **[Iterative Strands Evaluation](#6-iterative-strands-evaluation-strandsflow)** is another function called `flow` (accepting a vector of `strands` as parameter) implemented in `StrandFlow.h`[^strandsflow-entrypoint]. In this document we refer to it as `strandsFlow`. It orchestrates evaluating each strand and deciding which of them to use.
-- **[Strand Flow](#7-single-strand-evaluation-strandflow)** (another function called `flow`, accepting a single `strand` as parameter) is implemented in `StrandFlow.h` in the paths/detail module[^strandflow-entrypoint]. In this document we refer to is as `strandFlow`. It evaluates a strand using the [two-pass method](#73-reverse-and-forward-passes).
+- **[Strand Flow](#7-single-strand-evaluation-strandflow)** (another function called `flow`, accepting a single `strand` as parameter) is implemented in `StrandFlow.h` in the paths/detail module[^strandflow-entrypoint]. In this document we refer to it as `strandFlow`. It evaluates a strand using the [two-pass method](#73-reverse-and-forward-passes).
 - **Finish Flow** (`finishFlow` function) cleans up after the execution is complete.
 
 [^flow-entrypoint]: Flow entry point implementation: [`Flow.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Flow.cpp#L36)
 [^strandsflow-entrypoint]: Iterative Strands Evaluation implementation: [`StrandFlow.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/StrandFlow.h#L552)
 [^strandflow-entrypoint]: Strand Flow implementation: [`StrandFlow.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/StrandFlow.h#L86)
 [^tostrands]: toStrands implementation: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L601)
+[^quality-rate]: Quality stored as normalize(input / output) via `getRate`: [`STAmount.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/STAmount.cpp#L451-L472), [`Quality.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Quality.cpp#L16-L18)
+[^quality-comparison]: Inverted comparison operators (lower stored value = higher quality): [`Quality.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/Quality.h#L230-L244)
+[^quality-increment]: Increment decreases stored value (higher quality), decrement increases it (lower quality): [`Quality.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Quality.cpp#L21-L53)
+[^quality-no-improvement]: Quality anti-improvement check in `qualitiesSrcRedeems`: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L750-L762)
+[^composed-quality]: `composed_quality` multiplies step rates: [`Quality.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Quality.cpp#L139-L161)
 
 **Step Implementations:**
 
@@ -269,11 +284,18 @@ Each step type inherits from the `Step` interface through a `StepImp` template b
 
 **Partial Payment** - A payment mode where delivering less than the full requested amount is acceptable. Enabled by the `tfPartialPayment` flag on [Payment transactions](../payments/README.md).
 
-**Offer Crossing** - When an [OfferCreate transaction](../offers/README.md) consumes offers from the order book, using the Flow engine to execute the exchange.
+**Offer Crossing** - The process by which an [OfferCreate transaction](../offers/README.md) consumes existing offers from the order book, using the Flow engine to execute the exchange.
 
 ## 2.1. Quality
 
-Quality represents the exchange rate for a payment step or strand, calculated as the ratio of input amount to output amount. Lower quality values are better, meaning less input is required to produce the same output. For example, a quality of 1.05 means 105 units of input produce 100 units of output.
+Quality represents the exchange rate for a payment step or strand, calculated as the ratio of input amount to output amount. Lower quality values are better, meaning less input is required to produce the same output. For example, a quality of 1.05 means 105 units of input produce 100 units of output. A quality of exactly 1.0 (represented in the codebase as the constant `QUALITY_ONE = 1,000,000,000`) means parity: one unit of input per unit of output.
+
+> [!NOTE]
+> **Quality Representation in the Codebase:** Quality is stored as the ratio of input to output (in/out).[^quality-rate] A quality value of 1.02 means the taker pays 1.02 units per unit received. Lower quality values represent better deals.
+>
+> This creates a potential source of confusion: colloquially, "higher quality" means a better deal, but a better deal corresponds to a *lower* quality value. The codebase resolves this by inverting the comparison operators in the `Quality` class[^quality-comparison]. Comparing two qualities returns true for "greater than" when the left side has a lower stored value, because a lower ratio represents a better deal. Similarly, the increment operator advances to the next higher quality by *decreasing* the stored value, and the decrement operator does the opposite.[^quality-increment]
+>
+> Throughout this document, "better quality" and "higher quality" mean a lower in/out ratio (less input per unit of output).
 
 Quality is determined by the following factors:
 
@@ -283,17 +305,62 @@ Quality is determined by the following factors:
 
 **Transfer fees**: Fees set on an issuer's account (via the `TransferRate` field) that are charged when value flows through their account as an intermediary in a trust line payment. When an issuer has a 2% transfer fee, moving 100 units of their issued currency through them as an intermediary requires 102 units of input, degrading quality by the fee percentage. Transfer fees do NOT apply to direct issuer<->holder transfers, only to holder<->holder transfers that pass through the issuer. For MPTs, transfer fees are set on the MPT issuance itself. See [DirectStepI quality](steps.md#221-quality-implementation) and [MPTEndpointStep quality](steps.md#43-qualityupperbound-implementation) for implementation details.
 
-**QualityIn and QualityOut**: Trust line settings that allow account holders to demand better or worse than face value when [rippling](../glossary.md#rippling) the same IOU currency through different issuers. A holder with QualityIn of 0.98 receives only 98 cents on the dollar, while QualityOut of 1.02 means they must send 102 cents to deliver a dollar to the next step. These settings create discounts or premiums relative to the nominal value. See [DirectStepI quality implementation](steps.md#221-quality-implementation) for details.
-During quality calculation for DirectStepI when the source is redeeming, the step checks the previous step's destination QualityIn (trust line setting) against the current step's source QualityOut (trust line setting). If the previous step's destination demands a higher quality when receiving (higher QualityIn), the current step's source must use at least that quality when sending (QualityOut). For example, if Alice's trust line has QualityIn of 1.05 (she demands 105 units to accept 100 in her account), and Bob's trust line has QualityOut of 1.02 (he sends 102 units for 100 to flow through), Bob's QualityOut is raised to 1.05 to match Alice's demand. This ensures trust line quality settings are consistent when value ripples through multiple intermediaries - you cannot have someone offering better terms than the previous account demands.
+**QualityIn and QualityOut**: Trust line settings that adjust the effective value of tokens when [rippling](../glossary.md#rippling) through an account. Both are stored as ratios relative to `QUALITY_ONE` (1,000,000,000); a value of 0 or `QUALITY_ONE` means face value (no adjustment). QualityIn controls how the destination values incoming tokens: a value below `QUALITY_ONE` (e.g. 990,000,000, ratio 0.99) means each token is counted at less than face value (here, 99%), so more tokens must be sent to deliver the same effective value downstream. QualityOut controls the cost of sending: a value above `QUALITY_ONE` (e.g. 1,010,000,000, ratio 1.01) means 1% more tokens must be sent per unit of value. Together, these settings allow intermediary accounts to charge a spread when value ripples through them. QualityIn applies only when the source of the step is issuing, and QualityOut applies only when the source is redeeming. Additionally, QualityIn is clamped to `QUALITY_ONE` on the last step of a strand, so the final recipient does not benefit from a favorable QualityIn setting. See [DirectStepI quality implementation](steps.md#221-quality-implementation) for details.
 
-Each step type calculates quality differently based on these factors. See the [steps documentation](steps.md) for detailed quality calculations.
+When the source of a DirectStepI is redeeming, the engine ensures that quality does not improve as value flows through an intermediate account. If the previous step's destination has a QualityIn that exceeds the current step's source QualityOut, the source QualityOut is raised to match.[^quality-no-improvement] To see why this is necessary, consider a USD payment path Alice -> Bob -> Charlie, where Charlie is the issuer. The Bob -> Charlie DirectStep is redeeming. Bob has the following trust line settings:
 
-When multiple steps form a strand, the overall strand quality is the product (multiplication) of all individual step qualities. For example, if a strand has three steps with qualities 1.02, 1.05, and 1.01, the composed strand quality is 1.02 × 1.05 × 1.01 ≈ 1.082. This means delivering 100 units to the destination requires approximately 108.2 units from the source.
+- Bob's trust line from Alice has QualityIn = 1.05
+- Bob's trust line to Charlie has QualityOut = 1.02
 
+The composed rate through Bob is `out = in × QualityIn / QualityOut`. Without anti-improvement, if Alice sends 100 USD into Bob: out = 100 × 1.05 / 1.02 = 102.94 USD, value increases just by flowing through Bob.
+
+With the anti-improvement check, because the Bob -> Charlie step is redeeming, the engine enforces QualityOut >= previous step's QualityIn. QualityOut is raised to 1.05: out = 100 × 1.05 / 1.05 = 100 USD. Value does not improve as it passes through Bob.
+
+Each step type calculates quality differently:
+
+| Step Type | Payment Quality Factors | Offer Crossing Quality Factors |
+|-----------|------------------------|-------------------------------|
+| **XRPEndpointStep** | Always `QUALITY_ONE` (1:1)[^xrp-quality] | Same[^xrp-quality-oc] |
+| **MPTEndpointStep** | Transfer rate only (applies only when issuing and previous step redeems)[^mpt-quality-issues] | Always `QUALITY_ONE`: during offer crossing, the previous step is always a BookStep that issues[^mpt-oc-prev-issues], so the transfer rate condition is never met |
+| **DirectStepI** | Trust line QualityIn/QualityOut[^direct-quality-payment] + issuer transfer rate (transfer rate applies only when issuing and previous step redeems)[^direct-quality-issues] | Always `QUALITY_ONE`: trust line quality settings are ignored[^direct-quality-oc] and the previous step is always a BookStep that issues[^direct-oc-prev-issues], so the transfer rate condition is also never met |
+| **BookStep** | Order book exchange rate + input transfer fee (when previous step redeems)[^book-quality-payment]. Output transfer fee does not apply for payments (`ownerPaysTransferFee` is false)[^book-owner-pays] | CLOB and multi-path AMM: no transfer fee adjustment[^book-quality-oc]. Single-path AMM (requires `fixAMMv1_1`): input transfer fee only (when previous step redeems)[^book-quality-oc-amm] |
+
+See the [steps documentation](steps.md) for detailed quality calculations.
+
+[^xrp-quality]: XRPEndpointStep always returns `Quality{STAmount::uRateOne}`: [`XRPEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/XRPEndpointStep.cpp#L239-L247)
+[^xrp-quality-oc]: `qualityUpperBound` is in the base template `XRPEndpointStep<TDerived>` with no override in the offer crossing variant `XRPEndpointOfferCrossingStep`: [`XRPEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/XRPEndpointStep.cpp#L172-L225)
+[^mpt-quality-issues]: MPTEndpointStep applies transfer rate in `qualitiesSrcIssues` only when `redeems(prevStepDebtDirection)`: [`MPTEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/MPTEndpointStep.cpp#L796-L816)
+[^mpt-oc-prev-issues]: MPTEndpointOfferCrossingStep asserts previous step always issues: [`MPTEndpointStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/MPTEndpointStep.cpp#L288-L299)
+[^direct-quality-payment]: DirectIPaymentStep reads QualityIn/QualityOut from trust line fields: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L311-L348)
+[^direct-quality-issues]: DirectStepI applies transfer rate in `qualitiesSrcIssues` only when `redeems(prevStepDebtDirection)`: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L765-L788)
+[^direct-quality-oc]: DirectIOfferCrossingStep ignores trust line quality fields, always returns `QUALITY_ONE`: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L350-L356)
+[^direct-oc-prev-issues]: DirectIOfferCrossingStep asserts previous step always issues: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L265-L276)
+[^book-quality-payment]: BookPaymentStep `adjustQualityWithFees` applies input transfer fee when `redeems(prevStepDir)`: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L306-L332)
+[^book-owner-pays]: Output transfer fee requires `ownerPaysTransferFee_`, which is only true for offer crossing: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L326-L328)
+[^book-quality-oc]: BookOfferCrossingStep returns unmodified offer quality for CLOB and multi-path AMM: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L492-L526)
+[^book-quality-oc-amm]: Single-path AMM input transfer fee during offer crossing requires `fixAMMv1_1`: [`BookStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/BookStep.cpp#L511-L525)
+
+The engine uses quality in two phases. Before executing a strand, it computes an estimated quality upper bound (the product of step quality estimates) to sort strands from best to worst and to filter out strands that fall below the `limitQuality` threshold. After executing a strand, it computes the actual quality from the execution results (actual input / actual output) and checks it against `limitQuality` again. The estimate and actual quality can differ because offers may be unfunded, balances may have changed, or rounding may have occurred. See [qualityUpperBound](#62-qualityupperbound) for details on strand sorting and filtering.
+
+## 2.2. Debt Direction (Redeeming vs Issuing)
+
+Every step must know whether its source account is **redeeming** or **issuing** relative to its destination. 
+
+Debt direction controls which quality adjustments and fees apply to a step. The same step between the same two accounts can produce different exchange rates depending on which direction the debt is moving. Transfer fees, QualityIn/QualityOut, and the anti-improvement constraint each apply only in one debt direction, not the other.
+
+A step also needs to know the **previous step's** debt direction. Certain fees are charged when the current step is issuing but the previous step was redeeming. Each step therefore propagates its debt direction to the next step via `qualityUpperBound` and the `revImp`/`fwdImp` methods. 
+
+See [step quality implementation](steps.md) for how each factor is conditionally applied based on debt direction and how debt direction is determined.
+
+[^debt-direction-enum]: `DebtDirection` enum definition: [`Steps.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/Steps.h#L25)
+[^debt-direction-direct]: DirectStepI determines debt direction via `accountHolds`: [`DirectStep.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/DirectStep.cpp#L479-L482)
 
 # 3. Flow
 
 The `flow` function[^flow-entrypoint] is the entry point to the payment execution engine. It accepts the following parameters:
+
+> [!NOTE]
+> Parameter names and definitions are simplified to provide an overview. They do not map 1:1 to the C++ implementation, but are intended to make the pseudocode in later sections easier to follow.
 
 | Parameter              | Description                                                                                                                       | Required             |
 |------------------------|-----------------------------------------------------------------------------------------------------------------------------------|----------------------|
@@ -464,7 +531,7 @@ Otherwise, the strand is added to a collection storing strands.
 
 If there are any valid strands, they are returned. If there are no valid strands, the function returns the reason why the last strand has failed. 
 
-Please note that the following diagram simplifies the function. `rippled` implementation gives special consideration to the default path and then loops over user-provided paths. This does not change functionality from what is described here and is likely a result of technical debt.
+Please note that the following diagram simplifies the function. `rippled` implementation gives special consideration to the default path and then loops over user-provided paths. This does not change functionality from what is described here.
 
 ```mermaid
 sequenceDiagram
@@ -524,7 +591,7 @@ A **path** is a sequence of **path elements** that describe a route through whic
 | `dst`                  | Destination account ID                                                                           | ✅                    |
 | `deliver`              | The asset that should be delivered to the destination                                            | ✅                    |
 | `limitQuality`         | The worst acceptable quality from a single strand                                                | ❌                    |
-| `sendMaxIssue`         | Maximum user is willing to spend - specifies the asset being spent (if different from deliver)   | ❌                    |
+| `sendMaxAsset`         | Maximum user is willing to spend - specifies the asset being spent (if different from deliver)   | ❌                    |
 | `path`                 | User-provided payment path - sequence of accounts and/or currency/issuer pairs to route through  | ✅ (but can be empty) |
 | `ownerPaysTransferFee` | If true, the offer owner pays transfer fees; if false, the taker pays                            | ✅                    |
 | `offerCrossing`        | Enum indicating if this is offer crossing (no/yes/sell)                                          | ✅                    |
@@ -542,7 +609,6 @@ After validation, `toStrand` normalizes the path[^path-normalization] before con
 [^path-normalization]: Path normalization implementation: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L269-L338)
 
 The path is composed of path elements, and normalizing a path means that path elements that are not explicitly defined but are necessary are added to the path.
-The goal of path normalization is to ensure user-provided path is connected to source and destination.
 
 The normalization process constructs a complete path by adding implied elements in the following order:
 
@@ -633,7 +699,7 @@ The conversion process iterates through adjacent pairs of path elements in the n
 
 In certain cases, additional steps must be inserted instead of calling `toStep()`:
 
-- **Offer -> Account (XRP output, last step)**[^xrp-endpoint-inject]: When an offer outputs XRP and the next element is the final destination account, insert `XRPEndpointStep(next)` and skip `toStep()` call
+- **Offer -> Account (XRP output)**[^xrp-endpoint-inject]: When an offer outputs XRP and the next element is an account: if this is the last pair, insert `XRPEndpointStep(next)`; otherwise return `temBAD_PATH` since XRP can only appear at strand endpoints
 - **Offer -> Account (IOU output, next is not issuer)**[^direct-step-inject]: When an offer outputs an IOU and the next account is not the issuer, insert `DirectStepI(issuer -> next)` and skip `toStep()` call
 
 [^xrp-endpoint-inject]: XRP endpoint injection: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L484-L496)
@@ -681,7 +747,7 @@ After path normalization and the main conversion loop (which handles implied ste
 [^tostep]: toStep implementation: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L58)
 
 The choice of step type depends on three key factors:
-- **Position in path**: Whether this is the first or last element pair in the normalized path (tracked via `ctx.isFirst` and `ctx.isLast`), which affects how XRP is handled
+- **Position in strand**: Whether the strand has no steps yet (`ctx.isFirst`, set via `strand.empty()`[^isfirst]) or this is the last element pair in the normalized path (`ctx.isLast`), which affects how XRP is handled
 - **Currency types**: Whether the currencies involved are XRP, Token (issued currency), or MPT (multi-purpose token)
 - **Element types**: Whether each element in the pair is an Account or an Order Book
 
@@ -711,6 +777,7 @@ When the second element in the pair is an order book, `toStep` creates `BookStep
   - IOU -> MPT: `BookStepIM`[^bookstep-im]
   - XRP -> XRP: Error (`temBAD_PATH`)[^bookstep-xrp-xrp]
 
+[^isfirst]: isFirst initialization: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L739)
 [^first-xrp]: First XRP element check: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L66-L71)
 [^last-xrp]: Last XRP element check: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L73-L74)
 [^account-account]: Account to account check: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L91-L108)
@@ -821,7 +888,7 @@ For example, Alice wants to send MPT/B to Bob and pay for it using MPT/A. There 
 During path-to-strand conversion, the algorithm tracks the current asset flowing through the path using `curAsset`, which is a variant that can hold either:
 
 - **Issue**: Represents XRP or IOU (issued currency). Has two separate fields:
-  - `currency`: The 3-letter currency code (or special XRP currency code)
+  - `currency`: The IOU currency code (or special XRP currency code)
   - `account`: The issuer's account ID (for IOUs) or special zero account (for XRP)
 
   These fields are independently mutable - a path element might update just the currency, just the issuer, or both.
@@ -1062,7 +1129,7 @@ Each iteration performs:
 3. **AMM optimization** (when applicable): If only one strand remains with a `limitQuality` requirement, calculate the maximum output amount that maintains acceptable average quality. AMM pools degrade in quality as liquidity is consumed, so this pre-calculation ensures the requested amount won't violate the quality threshold.
 
 4. **Evaluate each strand** in quality order:
-    - If the strand's quality is below `limitQuality` (when defined), skip it for this iteration but keep it in the queue for future iterations
+    - If the strand's quality is below `limitQuality` (when defined), permanently remove it from consideration
     - If the strand is dry (no liquidity available), reject it and continue to the next strand
     - Otherwise, execute the strand:
         - Consume liquidity from the strand
@@ -1098,7 +1165,7 @@ If all validations pass, returns success with the actual amounts consumed/delive
 
 **Example: Cross currency payment with three strands**
 
-Alice wants to send 100 EUR (IOU) to Bob using her USD (IOU). Her SendMax is 100 USD and she does not set a quality limit. 
+Alice wants to send 100 EUR (IOU) to Bob using her USD (IOU). Her SendMax is 1000 USD and she does not set a quality limit. 
 
 Liquidity is provided by:
 - **AMM Pool**: 100 USD <-> 100 EUR (0.3% fee)
@@ -1169,12 +1236,12 @@ Available strands are:
 
 - Remaining: ~53.964 EUR
 - Ranking:
-    - AMM strand (only strand remaining). During ranking, Multi-Path mode is used for calculating, because at this point it's not clear that there will be onl one strand remaining.
+    - AMM strand (only strand remaining). During ranking, Multi-Path mode is used for calculating, because at this point it's not clear that there will be only one strand remaining.
 - Selected: AMM strand
 - AMM switches to **Single-Path Mode** ([steps.md section 5.4.3.3](steps.md#5433-single-path-mode-clob-matching-sizing)) because only one strand remains. The AMM consumes a large portion of the pool to complete the payment, resulting in significant quality degradation (quality ~3.019 vs ~1.305 in multi-path mode).
 - Consumed: ~162.925 USD -> ~53.964 EUR
 
-Payment was completed: Alice delevered 100 EUR to Bob, while paying ~211.296 USD. 
+Payment was completed: Alice delivered 100 EUR to Bob, while paying ~211.296 USD. 
 
 **Example: Cross currency payment with three strands and quality limit**
 
@@ -1196,7 +1263,7 @@ def strandsFlow(
         baseView: PaymentSandbox,
         strands: List[Strand],
         outReq: XRPAmount | IOUAmount | MPTAmount,
-        patialPayment: bool,
+        partialPayment: bool,
         offerCrossing: OfferCrossing,
         limitQuality: Optional<Quality>,
         sendMax: Optional<SendMaxST>,
@@ -1310,7 +1377,7 @@ def strandsFlow(
             return tefEXCEPTION, offersToRemoveOnFailure
         
         if not partialPayment:
-            if offerCrossing == "yes" and offerCrossing != "sell":
+            if not offerCrossing or offerCrossing != "sell":
                 # If this is a buy offer crossing
                 return tecPATH_PARTIAL, actualIn, actualOut, offersToRemoveOnFailure
         elif actualOut == 0:
@@ -1367,16 +1434,21 @@ The [`limitOut`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac8
 
 [^limitout-call]: See [`limitOut` call in `flow` function in StrandFlow.h](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/StrandFlow.h#L651)
 
-Unlike CLOB offers which have fixed quality, AMM pools exhibit dynamic quality that degrades as more liquidity is consumed.
+Unlike CLOB offers which have fixed quality, AMM pools exhibit dynamic quality that degrades as more liquidity is consumed. AMMs use a constant product invariant: `poolGets * poolPays = (poolGets + in * cfee) * (poolPays - out)`. Solving for `in` and substituting into `q = out / in` gives:
 
-The function will loop over steps in strands and get the quality function for each step. Steps like `XRPEndpointStep`, `MPTEndpointStep` and `DirectOrderI` will have a constant quality function.[^constant-quality] A `BookStep` with `AMM` offer will have a dynamic quality function.[^dynamic-quality]
+$$q(out) = cfee \times \frac{poolPays - out}{poolGets} = \frac{-cfee}{poolGets} \times out + \frac{cfee \times poolPays}{poolGets}$$
+
+Quality degrades as more output is consumed. Reducing the output increases quality, which is why `limitOut` can find the exact output where quality equals `limitQuality`.
+
+The function will loop over steps in strands and get the quality function for each step. Steps like `XRPEndpointStep`, `MPTEndpointStep` and `DirectStepI` will have a constant quality function.[^constant-quality] A `BookStep` with `AMM` offer will have a dynamic quality function.[^dynamic-quality]
+
 All quality functions are combined and a composed quality function is created which will not be constant if at least one quality within it is not constant.[^isconst]
 
 If the composite quality function is constant (all steps have fixed quality), then the strand's quality won't change regardless of the amount consumed. In this case, `limitOut` returns the original `remainingOut` unchanged since the optimization doesn't apply. The strand will either meet the quality threshold for the full amount or fail entirely.
 
 When the composite quality function is non-constant (contains at least one AMM step), `limitOut` uses [`qualityFunction.outFromAvgQ(limitQuality)`][outfromavgq] to mathematically solve for the maximum output amount where the average quality equals `limitQuality`.
 
-All quality functions represent average quality as a linear function of output: `q(out) = m * out + b`. The parameters `m` and `b` differ based on the liquidity source:
+Quality functions represent average quality as a linear function of output: `q(out) = m * out + b`. The parameters `m` and `b` differ based on the liquidity source:
 
 **For AMM steps:**
 - `m` (slope) = [`-cfee / amounts.in`][amm-m] - captures how quality degrades as more is consumed from the AMM pool, where `amounts.in` is `poolGets` and [`cfee = 1 - tfee`][cfee] is the fee multiplier
@@ -1390,7 +1462,7 @@ When multiple steps are combined, their quality functions are composed to create
 
 The `outFromAvgQ` function inverts this relationship to solve for output: `out = (1/quality.rate() - b) / m`.
 
-A special case is handled when there is no positive `out` for the desired `limitQuality`, when `outFromAvg` returns a null result to indicate this is the case.
+A special case is handled when there is no positive `out` for the desired `limitQuality`, when `outFromAvgQ` returns a null result to indicate this is the case.
 
 [amm-m]: https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/QualityFunction.h#L82
 [amm-b]: https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/QualityFunction.h#L83
@@ -1429,7 +1501,7 @@ The base `Step` class defines common `fwd` and `rev` interfaces, which delegate 
 
 Both `fwd` and `rev` methods accept two separate ledger views:
 - **`sb`** (PaymentSandbox): Tracks balance changes as the strand executes (updated with each step, and reset when a limiting step is found)
-- **`afView`** ("all funds view", ApplyView): Preserves account balances from the start of the current evaluation phase (reset along with `sb` when a limiting step is found), used to determine if an offer becomes unfunded or is found unfunded based on the original balances before this evaluation phase
+- **`afView`** ("all funds view", ApplyView): Preserves account balances from the start of the current evaluation phase (reset along with `sb` when an output-limiting step is found, kept intact for maxIn-limiting steps), used to determine if an offer becomes unfunded or is found unfunded based on the original balances before this evaluation phase
 
 ## 7.1. Method `fwd`
 
@@ -1440,7 +1512,7 @@ Each step type has its own implementation with different liquidity calculation l
 - **[DirectStepI fwdImp](steps.md#212-fwdimp-implementation)**
 - **[XRPEndpointStep fwdImp](steps.md#32-fwdimp-implementation)**
 - **[MPTEndpointStep fwdImp](steps.md#42-fwdimp-implementation)**
-- **[BookStep fwdImp](steps.md#42-fwdimp-implementation)**
+- **[BookStep fwdImp](steps.md#52-fwdimp-implementation)**
 
 `fwd` accepts:
 
@@ -1503,9 +1575,14 @@ This backward traversal identifies **limiting steps** - steps where either:
 - Required input exceeds `maxIn` (first step only), or
 - Actual output `Y` is less than required output `X`
 
-When a limiting step is found:
-- Clear the payment sandbox to reset any state changes
-- Re-execute the limiting step with the adjusted (possible) amount
+When a **maxIn-limiting** step is found (first step only, required input exceeds `maxIn`):
+- Clear the payment sandbox (`sb`) to reset any state changes
+- Re-execute the step in the forward direction with `maxIn` as input
+- Verify the re-execution consumes exactly `maxIn`
+
+When an **output-limiting** step is found (actual output less than requested):
+- Clear both the payment sandbox (`sb`) and all funds view (`afView`)
+- Re-execute the step in the reverse direction with the reduced output
 - Verify the re-execution produces consistent results
 
 **Forward Pass:**
@@ -1613,11 +1690,11 @@ It is no surprise that the BookStep can provide this liquidity, since in the rev
 flowchart LR
     alice((Alice))
     aliceToIssuer{{DirectStepI}}
-    issuerToOfferToIssuer{{BookStep<br>fwd: 10.29 EUR out}}
+    issuerToOfferToIssuer{{BookStep<br>fwd: 10.29 USD in}}
     issuerToBob{{DirectStepI}}
     bob((Bob))
     alice --> aliceToIssuer -- 10.29 USD --> issuerToOfferToIssuer -- 6.86 EUR --> issuerToBob --> bob
-    
+
     style issuerToOfferToIssuer stroke:blue,stroke-width:3px
 ```
 

@@ -9,6 +9,7 @@
         - [2.1.3. Reserves](#213-reserves)
     - [2.2. RippleState Ledger Entry](#22-ripplestate-ledger-entry)
     - [2.3. MPT Ledger Entries](#23-mpt-ledger-entries)
+    - [2.4. AMM Ledger Entries](#24-amm-ledger-entries)
 - [3. Transactions](#3-transactions)
     - [3.1. Payment Transaction](#31-payment-transaction)
         - [3.1.1. Failure Conditions](#311-failure-conditions)
@@ -18,8 +19,6 @@
     - [4.2. Cross-Currency Payment Execution](#42-cross-currency-payment-execution)
         - [4.2.1. Path Finding](#421-path-finding)
         - [4.2.2. Flow Execution](#422-flow-execution)
-    - [4.3. Direct MPT Payment Execution](#43-direct-mpt-payment-execution)
-        - [4.3.1. Transfer Scenarios](#431-transfer-scenarios)
 
 # 1. Introduction
 
@@ -43,7 +42,7 @@ Payments execute either fully or partially (when `tfPartialPayment` flag is set)
 The Payment transaction interacts with different ledger entry types depending on the payment mode:
 
 - **Direct XRP payments**: Modify only `AccountRoot` entries to update XRP balances
-- **Direct MPT payments**: Modify `AccountRoot` entries, 
+- **Direct MPT payments**: Modify `MPToken` entries (sender and receiver balances), and `MPTokenIssuance` entry (to track outstanding amount and transfer fee burns)
 - **Cross-currency payments**: May modify `AccountRoot`, `RippleState` (trust lines), `DirectoryNode` (owner directories and order book directories), `Offer` (consuming or partially consuming offers from the order book), `AMM` (when AMM liquidity is used for swaps), `MPTokenIssuance` entry (to track outstanding amount), and `MPToken` entries for sender and receiver holders
 
 ## 2.1. AccountRoot Ledger Entry
@@ -97,7 +96,7 @@ See [Trust Lines Documentation](../trust_lines/README.md#21-ripplestate-ledger-e
 
 See [MPT Documentation](../mpts/README.md#2-ledger-entries) for complete details on MPT related ledger entries.
 
-## 2.3. AMM Ledger Entries
+## 2.4. AMM Ledger Entries
 
 See [AMM Documentation](../amms/README.md#2-ledger-entries) for complete details on AMM related ledger entries.
 
@@ -160,16 +159,18 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
     - `sfCredentialIDs` array contains duplicate credential IDs
 - `temBAD_AMOUNT`:
     - `Amount` is XRP and mantissa is bigger than `100000000000000000ull`.
+    - `SendMax` is XRP and mantissa is bigger than `100000000000000000ull`.[^isLegalNet-sendmax]
     - `SendMax` is specified but is negative or zero.
     - `Amount` amount is negative or zero.
     - `DeliverMin` is specified without `tfPartialPayment`.
-    - `DeliverMin` is specified in XRP and mantissa is bigger than `100000000000000000ull`.
+    - `DeliverMin` is XRP and mantissa is bigger than `100000000000000000ull`, or `DeliverMin` is negative or zero.[^delivermin-checks]
     - `DeliverMin` currency is different from `Amount` currency.
-- `temBAD_CURRENCY`: Amount.currency field is XRP.
+    - `DeliverMin` is greater than `Amount`.
+- `temBAD_CURRENCY`: either `Amount` or `SendMax` (or the implied source amount) is a non-native asset that uses the XRP currency code.
 - `temDST_NEEDED`: destination account is not specified.
-- `temREDUNDANT`: payment is from account to itself with same currency and no `Paths` field, fail with. `Paths` are required because perhaps they will allow arbitrage.
+- `temREDUNDANT`: payment is from account to itself with same currency and no `Paths` field. `Paths` are required because perhaps they will allow arbitrage.
 - `temBAD_SEND_XRP_MAX`: XRP->XRP payment specifies `SendMax`.
-- `temBAD_SEND_XRP_PATHS`: XRP->XRP payment specifies `Paths`, or MPT->MPT payment specifies `Paths` (only if [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled).
+- `temBAD_SEND_XRP_PATHS`: XRP->XRP payment specifies `Paths`.
 - `temBAD_SEND_XRP_PARTIAL`: XRP->XRP payment has `tfPartialPayment` flag.
 - `temBAD_SEND_XRP_LIMIT`: XRP->XRP payment has `tfLimitQuality` flag, or MPT->MPT payment has `tfLimitQuality` flag (only if [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled).
 - `temBAD_SEND_XRP_NO_DIRECT`: XRP->XRP payment has `tfNoRippleDirect` flag, or MPT->MPT payment has `tfNoRippleDirect` flag (only if [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled).
@@ -177,6 +178,8 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 **Validation against the ledger view**[^preclaim-validation]
 
 [^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L249-L285), [`preclaim`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L288-L385)
+[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L126)
+[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L216-L238)
 
 - Destination account does not exist:
     - `tecNO_DST`: payment is not XRP
@@ -227,7 +230,7 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
     - `tecEXPIRED`: Any credential in `sfCredentialIDs` is expired
     - `tecNO_PERMISSION`: Source is not deposit preauthorized by destination (either by account or by credentials)
 - RippleCalc, which is a thin wrapper that calls the [Flow engine](../flow/README.md), is invoked to execute the provided payment paths. Flow may fail during path conversion or execution. See [Flow Validation and Error Codes](../flow/README.md#8-validation-and-error-codes) for complete details on error codes that can be returned during cross-currency payment execution.
-- `tecPATH_PARTIAL`: DeliverMin was specified and it is less than the delivered amount
+- `tecPATH_PARTIAL`: `DeliverMin` was specified and the delivered amount is less than `DeliverMin`
 
 ### 3.1.2. State Changes
 
