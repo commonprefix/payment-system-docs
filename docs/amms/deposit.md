@@ -37,7 +37,9 @@ AMM helpers use **token** as a subject in many function names. This refers to an
 
 The `applyGuts` function[^apply-guts] is the main entry point for processing AMMDeposit transactions.
 
-[^apply-guts]: `AMMDeposit::applyGuts`: [`AMMDeposit.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMDeposit.cpp#L383-L496) It retrieves the AMM ledger entry and current pool balances, then determines which trading fee applies to the depositor (regular or discounted for [auction slot holders](#3-gettradingfee)). Based on the transaction flags and provided fields, it dispatches to one of deposit mode handlers: three [multi-asset modes](#4-multi-asset-deposit-modes) that maintain proportional deposits or reinitialize empty pools, and three [single-asset modes](#5-single-asset-deposit-modes) that perform single-sided deposits. Each mode handler calculates the deposit amounts and LP tokens to issue, then calls the [common deposit function](#6-common-deposit-function) to execute the actual asset transfers and update the pool state.
+It retrieves the AMM ledger entry and current pool balances, then determines which trading fee applies to the depositor (regular or discounted for [auction slot holders](#3-gettradingfee)). Based on the transaction flags and provided fields, it dispatches to one of deposit mode handlers: three [multi-asset modes](#4-multi-asset-deposit-modes) that maintain proportional deposits or reinitialize empty pools, and three [single-asset modes](#5-single-asset-deposit-modes) that perform single-sided deposits. Each mode handler calculates the deposit amounts and LP tokens to issue, then calls the [common deposit function](#6-common-deposit-function) to execute the actual asset transfers and update the pool state.
+
+[^apply-guts]: `AMMDeposit::applyGuts`: [`AMMDeposit.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMDeposit.cpp#L383-L496) 
 
 ## 2.1. applyGuts Pseudo-Code
 
@@ -45,17 +47,17 @@ The `applyGuts` function[^apply-guts] is the main entry point for processing AMM
 def applyGuts(sb: &Sandbox, tx: Transaction):
     amount = tx[sfAmount]
     amount2 = tx[sfAmount2]
-    ePrice = tx[ePrice]
+    ePrice = tx[sfEPrice]
     ammSle = sb.getAMM(amount, amount2)
     if not ammSle:
         return tecInternal
 
-    ammAccountId = amm[sfAccount]
+    ammAccountId = ammSle[sfAccount]
 
     # In `rippled`, this is called "expected", but probably only to reflect the returned type. A better name is "existing" or "currentBalances"
     # ZERO_IF_FROZEN: treat frozen assets as having zero balance
     # ZERO_IF_UNAUTHORIZED: treat unauthorized MPT holders as having zero balance
-    currentBalances = ammHolds(sb, amm, amount, amount2, ZERO_IF_FROZEN, ZERO_IF_UNAUTHORIZED)
+    currentBalances = ammHolds(sb, ammSle, amount, amount2, ZERO_IF_FROZEN, ZERO_IF_UNAUTHORIZED)
     if not currentBalances:
         return currentBalances.error()
 
@@ -604,8 +606,8 @@ def singleDepositEPrice(
 
         # Adjust the deposit amount if rounding caused issues
         # This ensures we don't try to deposit more than the user's maximum
-        tokensAdj, amountDepositAdj = [adjustAssetInByTokens](helpers.md#26-adjustassetinbytokens)(
-            rules, amountBalance, amount, lptAMMBalance, tokens, tfee)
+        tokensAdj, amountDepositAdj = adjustAssetInByTokens(
+            rules, amountBalance, amount, lptAMMBalance, tokens, tfee) # helpers.md#26-adjustassetinbytokens
 
         if tokensAdj == 0:
             return (tecAMM_INVALID_TOKENS, None)

@@ -54,7 +54,7 @@ The logic branches into two cases: If no one owns the slot or it has expired (de
 
 # 2. applyBid
 
-The `applyBid` function is the main entry point that orchestrates the entire auction slot bidding flow. It handles slot ownership validation, price calculation, refund processing, and LP token burning. See [Implementation Flow](#12-implementation-flow) for a detailed walkthrough of how this function executes.
+The `applyBid` function is the main entry point that orchestrates the entire auction slot bidding flow. It handles slot ownership validation, price calculation, refund processing, and LP token burning. See [Implementation](#12-implementation) for a detailed walkthrough of how this function executes.
 
 ## 2.1. applyBid Pseudo-Code
 
@@ -276,27 +276,26 @@ def getPayPrice(
     # Both min/max bid price are defined
     if bidMin and bidMax:
         if computedPrice <= bidMax:
-            return max(computedPrice, bidMin)
+            payPrice = max(computedPrice, bidMin)
         else:
             log "AMM Bid: not in range"
             return tecAMM_FAILED
 
     # Only bidMin defined
-    # Bidder pays max(bidPrice, computedPrice)
     elif bidMin:
-        return max(computedPrice, bidMin)
+        payPrice = max(computedPrice, bidMin)
 
     # Only bidMax defined
     elif bidMax:
         if computedPrice <= bidMax:
-            return computedPrice
+            payPrice = computedPrice
         else:
             log "AMM Bid: not in range"
             return tecAMM_FAILED
 
     # Neither defined
     else:
-        return computedPrice
+        payPrice = computedPrice
 
     # Final validation: check if payPrice exceeds LP token holdings
     if payPrice > lpTokens:
@@ -332,7 +331,7 @@ computedPrice = pricePurchased * 1.05 + minSlotPrice
 
 This applies a simple 5% markup to the price the current owner paid.
 
-**For other intervals (timeSlot = 1-19):**
+**For other intervals (timeSlot = 1-18):**
 
 ```
 fractionUsed = (timeSlot + 1) / 20
@@ -373,7 +372,7 @@ Valid time slots are 0-19, where:
 - 19 = last interval (tailing slot)
 
 The `ammAuctionTimeSlot()` function returns:
-- `None` if the slot is not owned or expired
+- `None` if the slot has expired (or has an invalid expiration)
 - A value 0-19 indicating the current time interval
 
 # 7. Refund Mechanism

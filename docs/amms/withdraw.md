@@ -539,7 +539,7 @@ def singleWithdrawEPrice(
     ae = amountBalance * ePrice
 
     # Get fee multiplier
-    f = getFee(tfee)  # Convert basis points to Number (e.g., 30 -> 1.0003)
+    f = getFee(tfee)  # fee in units of 1/100,000 (e.g., 30 -> 0.0003)
 
     # Calculate LP tokens using derived formula
     # t = T*(T + B*E*(f-2)) / (T*f - B*E)
@@ -550,8 +550,8 @@ def singleWithdrawEPrice(
         (lptAMMBalance + ae * (f - 2)) / (lptAMMBalance * f - ae)
     )
 
-    tokensAdj = [getRoundedLPTokens](helpers.md#212-getroundedlptokens-callback-pseudo-code)(
-        rules, tokNoRoundCb, lptAMMBalance, tokProdCb, IsDeposit=False)
+    tokensAdj = getRoundedLPTokens(
+        rules, tokNoRoundCb, lptAMMBalance, tokProdCb, IsDeposit=False) # helpers.md#212-getroundedlptokens-callback-pseudo-code
 
     if tokensAdj <= 0:
         if not rules.enabled(fixAMMv1_3):
@@ -564,8 +564,8 @@ def singleWithdrawEPrice(
     amtNoRoundCb = lambda: tokensAdj / ePrice
     amtProdCb = lambda: tokensAdj / ePrice
 
-    amountWithdraw = [getRoundedAsset](helpers.md#232-getroundedasset-callback-pseudo-code)(
-        rules, amtNoRoundCb, amount, amtProdCb, IsDeposit=False)
+    amountWithdraw = getRoundedAsset(
+        rules, amtNoRoundCb, amount, amtProdCb, IsDeposit=False) # helpers.md#232-getroundedasset-callback-pseudo-code
 
     # Check if calculated amount meets user's minimum (if specified)
     if amount == 0 or amountWithdraw >= amount:
@@ -625,16 +625,22 @@ def withdraw(
     curBalance, curBalance2, _ = currentBalances
 
     # Adjust amounts for precision (with fixAMMv1_3, this shouldn't be needed as we have already adjusted and rounded all numbers properly)
-    amountWithdrawActual, amount2WithdrawActual, lpTokensWithdrawActual = \
-        adjustAmountsByLPTokens(
-            amountBalance,
-            amountWithdraw,
-            amount2Withdraw,
-            lpTokensAMMBalance,
-            lpTokensWithdraw,
-            tfee,
-            IsDeposit=False
-        )
+    # When withdrawing all, skip adjustment and use exact values
+    if withdrawAll == No:
+        amountWithdrawActual, amount2WithdrawActual, lpTokensWithdrawActual = \
+            adjustAmountsByLPTokens(
+                amountBalance,
+                amountWithdraw,
+                amount2Withdraw,
+                lpTokensAMMBalance,
+                lpTokensWithdraw,
+                tfee,
+                IsDeposit=False
+            )
+    else:
+        amountWithdrawActual = amountWithdraw
+        amount2WithdrawActual = amount2Withdraw
+        lpTokensWithdrawActual = lpTokensWithdraw
 
     # Validate LP tokens
     if lpTokensWithdrawActual <= 0 or lpTokensWithdrawActual > lpTokens:

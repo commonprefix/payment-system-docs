@@ -5,6 +5,7 @@
         - [1.1.1. Weighted Geometric Mean](#111-weighted-geometric-mean)
         - [1.1.2. Slippage](#112-slippage)
         - [1.1.3. LP Tokens](#113-lp-tokens)
+        - [1.1.4. Effective Price](#114-effective-price)
     - [1.2. Trading Fee](#12-trading-fee)
         - [1.2.1. Auction Slot](#121-auction-slot)
         - [1.2.2. Fee Voting](#122-fee-voting)
@@ -16,10 +17,9 @@
             - [2.1.2.2. AuctionSlot](#2122-auctionslot)
         - [2.1.3. Pseudo-accounts](#213-pseudo-accounts)
             - [2.1.3.1. Account ID Generation](#2131-account-id-generation)
-            - [2.1.3.3. Trust Line Flags](#2133-trust-line-flags)
         - [2.1.4. Reserves](#214-reserves)
     - [2.2. RippleState Ledger Entry](#22-ripplestate-ledger-entry)
-    - [2.3. AccountRoot Ledger Entry](#23-accountroot-ledger-entry)
+    - [2.3. MPToken Ledger Entry](#23-mptoken-ledger-entry)
 - [3. Transactions](#3-transactions)
     - [3.1. AMMCreate Transaction](#31-ammcreate-transaction)
         - [3.1.1. Failure Conditions](#311-failure-conditions)
@@ -64,7 +64,7 @@ An AMM instance is represented on-ledger by:
 
 The AMM manages a liquidity pool containing two assets (any combination of [XRP](../glossary.md#xrp), [IOUs](../glossary.md#iou), or [MPTs](../mpts/README.md)) and issues LP tokens representing proportional ownership of the pool.
 
-AMMs integrate with the [BookStep](../flow/steps.md#5-bookstep) of the Flow engine. During payment execution or offer crossing, BookStep generates synthetic offers from the AMM based on the current pool state and compares their quality against order book offers. The callback in `revImp` or `fwdImp` consumes whichever source provides better quality, updating either the AMM pool balances (via `ammAccountHold`) or order book entries accordingly.
+AMMs integrate with the [BookStep](../flow/steps.md#5-bookstep) of the Flow engine. During payment execution or offer crossing, BookStep generates synthetic offers from the AMM based on the current pool state and compares their quality against order book offers. The callback in `revImp` or `fwdImp` consumes whichever source provides better quality, updating either the AMM pool balances or order book entries accordingly.
 
 ## 1.1. Liquidity Pool Mechanics
 
@@ -105,6 +105,8 @@ The **spot price** is the weighted ratio of pool balances representing the excha
 ```
 SpotPrice(A) = (Γ_B / W_B) / (Γ_A / W_A) * 1/(1-TFee)
 ```
+
+`Tfee` is trading fee as a fraction (fee units / 100,000; see [Trading Fee](#12-trading-fee)).
 
 For equal weights (W_A = W_B = 0.5), this simplifies to:
 
@@ -212,7 +214,7 @@ Alice creates an AMM with 100 USD and 100 EUR (with 0.3% trading fee):
 - Using the single-asset deposit formula, Bob receives ~41.4 LP tokens
 - Total LP tokens: ~141.4
 
-### 1.2.1. Effective Price
+### 1.1.4. Effective Price
 
 For single-asset operations, users can specify an **effective price** to protect against unfavorable exchange rates:
 
@@ -222,8 +224,8 @@ For single-asset operations, users can specify an **effective price** to protect
   - Used in [singleDepositEPrice](deposit.md#53-singledepositeprice-tflimitlptoken) mode
 
 - **Withdrawal Effective Price** = LP Tokens Redeemed / Asset Withdrawn
-  - Example: Redeeming 40 LP tokens to withdraw 100 USD = 2.5 USD per LP token
-  - Users set a **minimum** effective price (won't accept less than X asset per LP token)
+  - Example: Redeeming 40 LP tokens to withdraw 100 USD = 0.4 LP tokens per USD
+  - Users set a **minimum** effective price (won't pay less than X LP tokens per unit of asset withdrawn)
   - Used in [singleWithdrawEPrice](withdraw.md#53-singlewithdraweprice-tflimitlptoken) mode
 
 ## 1.2. Trading Fee
@@ -264,9 +266,10 @@ Voting power is determined by the number of LP tokens held: an account holding 3
 **Vote Slot Management:**
 
 - Maximum 8 vote slots (defined by `VOTE_MAX_SLOTS`)[^vote-max-slots]
-- If all slots are full, new votes can replace the vote with the smallest LP token balance[^vote-min-tokens]
-- If LP token balances are equal, the lower fee is replaced
-- If both balance and fee are equal, the lexicographically smaller account ID is replaced
+- If a slot is available, the new vote is added directly
+- If all slots are full, replacement is a two-step process[^vote-min-tokens]:
+  1. **Find the eviction candidate:** select the existing slot with the smallest LP token balance, breaking ties by lowest fee, then by lexicographically smallest account ID
+  2. **Decide whether to replace:** the new vote replaces the candidate only if the new voter holds more LP tokens, or holds an equal amount and sets a higher fee. If both are equal, the new vote is not added
 - Vote weights are automatically recalculated when LP token balances change
 
 **Example:**
@@ -447,7 +450,7 @@ For a given asset pair and parent ledger hash, all nodes generate the same seque
 **Example:**
 
 For an AMM with USD/XRP:
-1. AMM keylet = `SHA512-Half(0x0079, USD_currency, USD_issuer, XRP_currency, XRP_issuer)`
+1. AMM keylet = `SHA512-Half(0x0041, XRP_account, XRP_currency, USD_account, USD_currency)`[^amm-keylet-hash]
 2. Attempt 0: `hash = SHA512-Half(0, parentHash, ammKeylet)` -> Account ID candidate
 3. If Account ID exists, try attempt 1: `hash = SHA512-Half(1, parentHash, ammKeylet)` -> New candidate
 4. Continue until unused account ID found or 256 attempts exhausted
@@ -466,10 +469,12 @@ AMMs create `RippleState` entries (trust lines) for:
 - Each IOU asset in the pool
 - The LP token issued by the AMM
 
-These trust lines are:
-- Marked with the `lsfAMMNode` flag[^ripplestate-amm-flag]
-- Have zero credit limits (prevent unsolicited deposits)
+All AMM trust lines:
+- Have zero credit limits (to prevent unsolicited deposits)
 - Do not have quality modifiers (QualityIn/QualityOut)[^ripplestate-no-quality]
+
+Pool asset trust lines (between the AMM account and the IOU issuer):
+- Are additionally marked with the `lsfAMMNode` flag[^ripplestate-amm-flag]
 
 [^ripplestate-amm-flag]: Trust line marked with lsfAMMNode flag: [`AMMCreate.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMCreate.cpp#L346-L348)
 [^ripplestate-no-quality]: Quality modifiers only set if non-zero: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1478-L1484)
@@ -550,6 +555,7 @@ Several AMM transactions (`AMMCreate`, `AMMDeposit`, `AMMWithdraw`, `AMMBid`) us
 [^mpt-internal]: Outstanding amount less than redemption: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L2126-L2127)
 [^amm-ledger-entry]: AMM ledger entry type definition: [`ledger_entries.macro`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/detail/ledger_entries.macro#L372-L383)
 [^amm-keylet]: AMM keylet computation using asset pair: [`Indexes.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Indexes.cpp#L451-L489)
+[^amm-keylet-hash]: AMM keylet hash with namespace `0x0041` and fields `(account, currency)` per asset: [`Indexes.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Indexes.cpp#L459-L464)
 [^amm-lpt-currency]: LP token currency code generation: [`AMMCore.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/AMMCore.cpp#L23-L46)
 [^amm-lp-tokens-calc]: Initial LP token calculation: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L5-L17)
 [^vote-max-slots]: Maximum vote slots constant: [`AMMCore.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/AMMCore.h#L25)
@@ -652,9 +658,9 @@ The two amounts can be in any order - the AMM will automatically order them as `
 
 - `RippleState` objects are **created** (for token assets):
     - For each non-XRP token asset: Trust line between AMM account and asset issuer
+        - Marked with `lsfAMMNode` flag
     - For LP tokens: Trust line between AMM account and creator
     - All trust lines:
-        - Marked with `lsfAMMNode` flag
         - Have zero credit limits
         - Initial balances set to deposited/issued amounts
 
@@ -814,7 +820,7 @@ The `AMMWithdraw` transaction removes liquidity from an AMM pool by redeeming LP
 | `Amount`          |                    |    `No`     | `String` or `Object` |   `Amount`    |               | Amount of one asset (interpretation depends on flags)                      |
 | `Amount2`         |                    |    `No`     | `String` or `Object` |   `Amount`    |               | Amount of the other asset (interpretation depends on flags)                |
 | `LPTokenIn`       |                    |    `No`     | `String` or `Object` |   `Amount`    |               | Amount of LP tokens to redeem (interpretation depends on flags)            |
-| `EPrice`          |                    |    `No`     | `String` or `Object` |   `Amount`    |               | Minimum effective price in same currency as `Amount` (tfLimitLPToken only) |
+| `EPrice`          |                    |    `No`     | `String` or `Object` |   `Amount`    |               | Minimum effective price in LP token currency (tfLimitLPToken only)          |
 | `Flags`           |                    |    `No`     |       `Number`       |   `UInt32`    |      `0`      | Transaction flags specifying withdrawal mode                               |
 
 ### 3.3.1. Withdrawal Modes

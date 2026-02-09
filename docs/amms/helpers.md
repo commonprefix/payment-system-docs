@@ -418,7 +418,7 @@ When one side of the pool is XRP, the algorithm calculates the XRP side first (w
 def changeSpotPriceQuality(
         pool,           # TAmounts<TIn, TOut> with pool.in and pool.out balances
         quality,        # Target quality (typically best CLOB offer quality)
-        tfee,           # Trading fee in basis points
+        tfee,           # Trading fee in units of 1/100,000
         rules):         # Ledger rules (for amendment checks)
     """
     This pseudocode assumes fixAMMv1_1 is enabled
@@ -432,7 +432,7 @@ def changeSpotPriceQuality(
         return getAMMOfferStartWithTakerPays(pool, quality, tfee)
 ```
 
-#### 2.1.4.2. getAMMOfferStartWithTakerGets
+#### 3.1.4.2. getAMMOfferStartWithTakerGets
 
 Calculate AMM offer starting with takerGets (output) when takerGets is XRP.[^get-amm-offer-start-with-taker-gets]
 
@@ -445,9 +445,9 @@ The algorithm solves for two different scenarios and selects the smallest takerG
 **Scenario A:** Spot Price Quality after consumption equals target quality
 - Condition: `Qsp = (O - o) / (I + i) = targetQuality`
 - Where: O = pool.out, I = pool.in, o = takerGets, i = takerPays
-- Substitute `i` from swap equation: `i = (I * o) / (O - o) * f` where `f = 1 - tfee/100000`
-- Results in quadratic: `o^2 + o * (I * (1 - 1/f) * Qt - 2*O) + O^2 - I * O * Qt = 0`
-- NB: The code uses `targetQuality.rate()` which returns `1/Qt`, so the code divides by `targetQuality.rate()` where the formula multiplies by Qt. The `rippled` comment uses Qt and we keep it for consistency.
+- Substitute `i` from swap equation: `i = (I * o) / ((O - o) * f)` where `f = 1 - tfee/100000`
+- Results in quadratic: `o^2 + o * (I * (1 - 1/f) / Qt - 2*O) + O^2 - I * O / Qt = 0`
+- NB: The code uses `targetQuality.rate()` which returns `1/Qt`, so the code divides by `targetQuality.rate()` where the formula in the `rippled` comment multiplies by Qt (comment and XLS-30 use Qt = targetQuality). Here, we adopt that Qt = 1 / targetQuality.
 
 **Scenario B:** Effective Price Quality equals target quality
 - Condition: `Qep = o / i = targetQuality`
@@ -461,7 +461,7 @@ def getAMMOfferStartWithTakerGets(pool, targetQuality, tfee):
         return None
 
     f = 1 - (tfee / 100000)  # Fee multiplier
-    Qt = targetQuality
+    Qt = 1 / targetQuality
 
     # Scenario A: Solve quadratic where spot price after = target quality
     # o^2 + o * (I * (1 - 1/f) / Qt - 2*O) + O^2 - I * O / Qt = 0
@@ -784,7 +784,7 @@ def lpTokensIn(
         assetBalance,      # Current pool balance of the asset (B)
         assetWithdraw,     # Amount of asset to withdraw (b)
         lptAMMBalance,     # Total outstanding LP tokens (T)
-        tradingFee):       # Trading fee in basis points
+        tradingFee):       # Trading fee in units of 1/100,000
     # Calculate withdrawal ratio
     R = assetWithdraw / assetBalance
 
@@ -869,7 +869,7 @@ def ammAssetOut(
         assetBalance,      # Current pool balance of the asset (B)
         lptAMMBalance,     # Total outstanding LP tokens (T)
         lpTokensRedeem,    # LP tokens to redeem (t)
-        tradingFee):       # Trading fee in basis points
+        tradingFee):       # Trading fee in units of 1/100,000
     """
     Assumes fixAMMv1_3 is enabled
     """
