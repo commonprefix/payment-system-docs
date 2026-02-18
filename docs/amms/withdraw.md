@@ -325,7 +325,7 @@ def equalWithdrawLimit(
         amount,               # User's max amount1 to withdraw
         amount2,              # User's max amount2 to withdraw
         tfee):                # Trading fee (not used for proportional)
-    # OPTION 1: Try using all of amount (asset1)
+    # STRATEGY 1: Try using all of amount (asset1)
     # Calculate what fraction of the pool this represents
     frac = amount / amountBalance
 
@@ -358,7 +358,7 @@ def equalWithdrawLimit(
             tfee
         )
 
-    # OPTION 2: Option 1 failed, try using all of amount2
+    # STRATEGY 2: Strategy 1 failed, try using all of amount2
     # Calculate what fraction of the pool amount2 represents
     frac = amount2 / amount2Balance
 

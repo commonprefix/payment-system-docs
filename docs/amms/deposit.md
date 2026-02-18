@@ -252,7 +252,7 @@ Alice has an AMM with 100 USD and 100 EUR (1:1 ratio). Bob wants to make a propo
   - Result: Deposits 50 USD + 50 EUR
 
 - **Case 2: Bob tries to deposit 50 USD + 100 EUR**
-  - Option 1: Use all 50 USD and needs 50 EUR to maintain 1:1 ratio - SUCCESS (has 100 EUR)
+  - Strategy 1: Use all 50 USD and needs 50 EUR to maintain 1:1 ratio - SUCCESS (has 100 EUR)
   - Result: Deposits 50 USD + 50 EUR, receives 50 LP tokens, 50 EUR unused
 
 ### 4.1.1. equalDepositLimit Pseudo-Code
@@ -268,7 +268,7 @@ def equalDepositLimit(
         amount2,              # User's max amount2 to deposit (from tx[sfAmount2])
         lpTokensDepositMin,   # Optional: min LP tokens expected (from tx[sfLPTokenOut])
         tfee):                # Trading fee (regular or discounted)
-    # OPTION 1: Try using all of amount (asset1)
+    # STRATEGY 1: Try using all of amount (asset1)
     frac = amount / amountBalance
 
     # Calculate LP tokens for this fraction (with precision adjustment)
@@ -300,7 +300,7 @@ def equalDepositLimit(
             tfee
         )
 
-    # OPTION 2: Option 1 failed, try using all of amount2
+    # STRATEGY 2: Strategy 1 failed, try using all of amount2
     frac = amount2 / amount2Balance
 
     # Calculate LP tokens for this fraction

@@ -775,7 +775,7 @@ The deposit mode is determined by exactly one of these flags (enforced by checki
 - `tecAMM_FAILED`: Deposit constraints not satisfied. The interpretation of transaction fields as minimums or maximums depends on the deposit mode flag (see [Deposit Modes](#321-deposit-modes)):
   - tfLPToken mode: calculated asset deposits are less than `Amount` or `Amount2` (optional minimums)
   - tfSingleAsset or tfTwoAsset mode: calculated LP tokens are less than `LPTokenOut` (optional minimum)
-  - tfTwoAsset mode: neither calculated deposit option satisfies both `Amount` and `Amount2` constraints (maximums)
+  - tfTwoAsset mode: neither calculated deposit strategy satisfies both `Amount` and `Amount2` constraints (maximums)
   - tfOneAssetLPToken mode: calculated deposit amount exceeds `Amount` (maximum willing to deposit)
   - tfLimitLPToken mode: calculated deposit amount is invalid or effective price constraint cannot be satisfied with `EPrice` (maximum effective price)
 - `tecAMM_INVALID_TOKENS`: Calculated LP tokens are zero or invalid. This can occur when:
