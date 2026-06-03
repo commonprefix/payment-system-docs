@@ -34,8 +34,9 @@
         - [3.5.1. Failure Conditions](#351-failure-conditions)
         - [3.5.2. State Changes](#352-state-changes)
     - [3.6. MPT Validation Functions](#36-mpt-validation-functions)
-        - [3.6.1. checkMPTDEXAllowed](#361-checkmptdexallowed)
-        - [3.6.2. checkMPTTxAllowed](#362-checkmptxallowed)
+        - [3.6.1. canTrade](#361-cantrade)
+        - [3.6.2. canTransfer](#362-cantransfer)
+        - [3.6.3. canMPTTradeAndTransfer](#363-canmpttradeandtransfer)
 - [4. MPT Payment Execution](#4-mpt-payment-execution)
     - [4.1. Transfer Scenarios](#41-transfer-scenarios)
         - [4.1.1. Issuer Minting (Issuer -> Holder)](#411-issuer-minting-issuer---holder)
@@ -184,7 +185,7 @@ Where `sequence` is the issuer's sequence number at creation time and `issuer` i
 
 These flags control different, independent aspects of MPT movement:
 
-- **`lsfMPTCanTrade`**: Required for all DEX operations. When set, the MPT can be listed in offers via [OfferCreate](../offers/README.md) (MPT/XRP, MPT/IOU, MPT/MPT pairs), deposited into [AMM pools](../amms/README.md), and used in [cross-currency payments](../payments/README.md#423-mpt-integration-in-cross-currency-payments) through order books and AMMs. Without this flag, all DEX operations fail with `tecNO_PERMISSION`, regardless of whether `lsfMPTCanTransfer` is set. DEX operations validate this flag through `checkMPTDEXAllowed()`, which also checks lock status and holder authorization. See [Section 3.6](#36-mpt-trading-on-dex) for complete DEX integration details.
+- **`lsfMPTCanTrade`**: Required for all DEX operations. When set, the MPT can be listed in offers via [OfferCreate](../offers/README.md) (MPT/XRP, MPT/IOU, MPT/MPT pairs), deposited into [AMM pools](../amms/README.md), and used in [cross-currency payments](../payments/README.md#423-mpt-integration-in-cross-currency-payments) through order books and AMMs. Without this flag, all DEX operations fail with `tecNO_PERMISSION`, regardless of whether `lsfMPTCanTransfer` is set. DEX operations validate this flag through `canTrade()`; lock status and holder authorization are checked separately by `isFrozen` and `requireAuth`. See [Section 3.6](#36-mpt-validation-functions) for complete validation details.
 
 - **`lsfMPTCanTransfer`**: Required for direct holder-to-holder transfers without DEX involvement. When set, holders can send MPTs directly to other holders via Payment transactions using direct balance update logic (no pathfinding, no order books). This flag is only required when neither the sender nor the receiver is the issuer. Transfers involving the issuer (minting from issuer to holder, or burning from holder to issuer) do not require this flag. See [MPT Payment Execution](#4-mpt-payment-execution) for transfer mechanics.
 
@@ -325,7 +326,7 @@ These flags control whether the corresponding capability flags can be changed af
 
 **Static validation**[^mptissuancecreate-static-validation]
 
-[^mptissuancecreate-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceCreate.cpp#L10-L22), [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceCreate.cpp#L25-L29), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceCreate.cpp#L32-L78)
+[^mptissuancecreate-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L30-L41), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L44-L48), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L51-L101)
 
 - `temDISABLED`: 
   - [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
@@ -342,7 +343,7 @@ These flags control whether the corresponding capability flags can be changed af
 
 **Validation during doApply**[^mptissuancecreate-doapply-validation]
 
-[^mptissuancecreate-doapply-validation]: Validation during doApply: [`MPTokenIssuanceCreate.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceCreate.cpp#L143-L162)
+[^mptissuancecreate-doapply-validation]: Validation during doApply: [`MPTokenIssuanceCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L176-L195)
 
 - `tecINSUFFICIENT_RESERVE`: Account has insufficient XRP balance to cover the reserve for creating the issuance (one owner reserve required)
 - `tecDIR_FULL`: Owner directory is full and cannot accommodate the new issuance
@@ -385,14 +386,14 @@ The `MPTokenIssuanceDestroy` transaction deletes an MPT issuance. This can only 
 
 **Static validation**[^mptissuancedestroy-static-validation]
 
-[^mptissuancedestroy-static-validation]: Static validation (preflight): [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceDestroy.cpp#L10-L13), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceDestroy.cpp#L16-L19)
+[^mptissuancedestroy-static-validation]: Static validation (preflight): [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L17-L20)
 
 - `temDISABLED`: [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
 - `temINVALID_FLAG`: Any non-universal flags specified
 
 **Validation against the ledger view**[^mptissuancedestroy-preclaim-validation]
 
-[^mptissuancedestroy-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenIssuanceDestroy.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceDestroy.cpp#L22-L42)
+[^mptissuancedestroy-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenIssuanceDestroy.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L23-L42)
 
 - `tecOBJECT_NOT_FOUND`: `MPTokenIssuance` with specified MPTID does not exist
 - `tecNO_PERMISSION`: Signing account is not the issuer
@@ -402,7 +403,7 @@ The `MPTokenIssuanceDestroy` transaction deletes an MPT issuance. This can only 
 
 **Validation during doApply**[^mptissuancedestroy-doapply-validation]
 
-[^mptissuancedestroy-doapply-validation]: Validation during doApply: [`MPTokenIssuanceDestroy.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceDestroy.cpp#L45-L61)
+[^mptissuancedestroy-doapply-validation]: Validation during doApply: [`MPTokenIssuanceDestroy.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L45-L59)
 
 - `tecINTERNAL`: Signing account is not the issuer
 - `tefBAD_LEDGER`: Failed to remove issuance from owner directory (indicates ledger corruption)
@@ -477,7 +478,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 **Static validation**[^mptissuanceset-static-validation]
 
-[^mptissuanceset-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L11-L16), [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L19-L22), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L49-L122)
+[^mptissuanceset-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L32-L37), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L40-L43), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L76-L140)
 
 - `temDISABLED`:
   - [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
@@ -500,7 +501,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 **Validation against the ledger view**[^mptissuanceset-preclaim-validation]
 
-[^mptissuanceset-preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L125-L159), [`preclaim`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L162-L249)
+[^mptissuanceset-preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L143-L173), [`preclaim`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L176-L265)
 
 - `terNO_ACCOUNT`: Signing account does not exist
 - `tecOBJECT_NOT_FOUND`:
@@ -519,7 +520,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 **Validation during doApply**[^mptissuanceset-doapply-validation]
 
-[^mptissuanceset-doapply-validation]: Validation during doApply: [`MPTokenIssuanceSet.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L252-L338)
+[^mptissuanceset-doapply-validation]: Validation during doApply: [`MPTokenIssuanceSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L268-L373)
 
 - `tecINTERNAL`: `MPTokenIssuance` does not exist
 
@@ -537,7 +538,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
   - If `MutableFlags` present with set flags: Set corresponding capability flags (e.g., `tmfMPTSetCanTrade` sets `lsfMPTCanTrade`)
   - If `MutableFlags` present with clear flags: Clear corresponding capability flags (e.g., `tmfMPTClearCanTrade` clears `lsfMPTCanTrade`). Clearing `lsfMPTCanTransfer` via `tmfMPTClearCanTransfer` also clears the `TransferFee` field.[^clear-cantransfer-clears-transferfee]
 
-[^clear-cantransfer-clears-transferfee]: Clearing `lsfMPTCanTransfer` clears `TransferFee`: [`MPTokenIssuanceSet.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenIssuanceSet.cpp#L286-L291)
+[^clear-cantransfer-clears-transferfee]: Clearing `lsfMPTCanTransfer` clears `TransferFee`: [`MPTokenIssuanceSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L313-L318)
 
 **When `Holder` is specified** (modifying `MPToken`):
 
@@ -584,7 +585,7 @@ The `MPTokenAuthorize` transaction manages `MPToken` entries and authorization. 
 
 **Static validation**[^mptokenauthorize-static-validation]
 
-[^mptokenauthorize-static-validation]: Static validation (preflight): [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenAuthorize.cpp#L11-L14), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenAuthorize.cpp#L17-L23)
+[^mptokenauthorize-static-validation]: Static validation (preflight): [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L23-L26), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L29-L35)
 
 - `temDISABLED`: [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
 - `temINVALID_FLAG`: Invalid flags specified
@@ -592,7 +593,7 @@ The `MPTokenAuthorize` transaction manages `MPToken` entries and authorization. 
 
 **Validation against the ledger view**[^mptokenauthorize-preclaim-validation]
 
-[^mptokenauthorize-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenAuthorize.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/MPTokenAuthorize.cpp#L26-L128)
+[^mptokenauthorize-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenAuthorize.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L38-L139)
 
 **When Holder NOT specified (holder-initiated)**:
 
@@ -620,7 +621,7 @@ The `MPTokenAuthorize` transaction manages `MPToken` entries and authorization. 
 
 **Validation during doApply**[^mptokenauthorize-doapply-validation]
 
-[^mptokenauthorize-doapply-validation]: Validation during doApply: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1297-L1402)
+[^mptokenauthorize-doapply-validation]: Validation during doApply: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L149-L267)
 
 - `tecINTERNAL`: Signing account does not exist
 
@@ -695,7 +696,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
 - `temBAD_AMOUNT`:
   - `Amount` is negative or zero
 
-[^clawback-static-validation]: Static validation (preflight): [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Clawback.cpp#L60-L63), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Clawback.cpp#L66-L75)
+[^clawback-static-validation]: Static validation (preflight): [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L78-L87)
 
 **Validation against the ledger view:**[^clawback-preclaim-validation]
 
@@ -711,7 +712,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
   - Issuance does not have `lsfMPTCanClawback` flag
 - `tecINSUFFICIENT_FUNDS`: Holder's `MPTAmount` is zero (nothing to claw back)
 
-[^clawback-preclaim-validation]: Validation against the ledger view (preclaim): [`preclaim`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Clawback.cpp#L176-L202)
+[^clawback-preclaim-validation]: Validation against the ledger view (preclaim): [`preclaim`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L184-L211)
 
 ### 3.5.2. State Changes
 
@@ -726,7 +727,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
 - `MPTokenIssuance` is **modified**:
   - `OutstandingAmount`: Decreased by clawed back amount
 
-[^clawback-doapply]: Validation during doApply: [`applyHelper<MPTIssue>`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Clawback.cpp#L239-L263)
+[^clawback-doapply]: Validation during doApply: [`applyHelper<MPTIssue>`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L243-L267)
 
 **Notes**:
 - The clawed back amount is removed from circulation (burned), not transferred to the issuer's balance. If the requested clawback amount exceeds the holder's balance, only the available balance is clawed back (no error).
@@ -734,62 +735,52 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
 
 ## 3.6. MPT Validation Functions
 
-MPT operations are validated through two public functions that call a common underlying validation logic. These functions are used by various transactions (OfferCreate, Payment, AMMCreate, etc.) to ensure MPTs meet the requirements for their intended use.
+MPTs are validated for DEX and transfer operations through helper functions in `MPTokenHelpers`. The two primary checks are **`canTrade`** (DEX tradability) and **`canTransfer`** (transferability between two parties), with a convenience wrapper **`canMPTTradeAndTransfer`** that runs both. All three return `tesSUCCESS` for XRP and IOU assets, they only constrain MPTs.
 
-### 3.6.1. checkMPTDEXAllowed
+These checks cover *tradability* and *transferability* only. Two related concerns are validated separately: lock status by `isFrozen` (`lsfMPTLocked`), and holder authorization by `requireAuth` (`lsfMPTRequireAuth`/`lsfMPTAuthorized` and DomainID credentials). A typical call site composes them, e.g. `requireAuth(...)` together with `canTrade(...)`.
 
-Used for DEX operations (offers, cross-currency payments).
+### 3.6.1. canTrade
 
-**Transactions using this validation**:
-- OfferCreate (CreateOffer::preclaim)
-- CheckCash (when cashing checks with MPT amounts)
-- Payment (when using paths for cross-currency conversion - validated in BookStep and MPTEndpointStep)
+`canTrade(view, asset)`: checks whether an asset may be traded on the DEX.
 
-**Validation checks performed**:
+**Used by**: OfferCreate (`OfferCreate::preclaim`) and cross-currency payment book steps (`BookStep`, `MPTEndpointStep`). AMM transactions reach it indirectly via `canMPTTradeAndTransfer`.
 
-1. **MPTokenIssuance exists**: Verifies the MPTokenIssuance object exists in the ledger
-2. **Issuer account exists**: Verifies the issuer's account exists
-3. **Global lock check**: Ensures `lsfMPTLocked` flag is not set on MPTokenIssuance
-4. **DEX permission**: Verifies `lsfMPTCanTrade` flag is set (required for all DEX operations)
-5. **Transfer permission** (when neither party is issuer): Verifies `lsfMPTCanTransfer` flag is set
-6. **Individual lock check** (if holder has MPToken): Ensures `lsfMPTLocked` flag is not set on the holder's MPToken entry
+**Checks performed** (MPT assets only; IOU/XRP return `tesSUCCESS`):
+
+1. **MPTokenIssuance exists**, else `tecOBJECT_NOT_FOUND`
+2. **`lsfMPTCanTrade` flag set** on the issuance, else `tecNO_PERMISSION`
+3. **Vault shares**: recurses into the underlying asset's tradability via `sfReferenceHolding` (when the `fixCleanup3_2_0` amendment is enabled)
 
 **Possible error codes**:
 
-- `tecNO_ISSUER`: Issuer account does not exist
 - `tecOBJECT_NOT_FOUND`: MPTokenIssuance does not exist
-- `tecLOCKED`: Global lock (`lsfMPTLocked` on MPTokenIssuance) OR individual lock (`lsfMPTLocked` on holder's MPToken)
-- `tecNO_PERMISSION`: `lsfMPTCanTrade` flag not set OR `lsfMPTCanTransfer` flag not set (when neither party is issuer)
+- `tecNO_PERMISSION`: `lsfMPTCanTrade` flag not set
 
-**When `lsfMPTCanTransfer` is checked**:
+`canTrade` does **not** check lock status or holder authorization. Those are handled separately by `isFrozen` and `requireAuth`.
 
-The `lsfMPTCanTransfer` check is only performed when the account is not the issuer AND (there is no destination account OR the destination is not the issuer). This means:
-- Issuer-involved operations (minting/burning) do not require `lsfMPTCanTransfer`
-- Holder-to-holder operations require both `lsfMPTCanTrade` (for DEX) and `lsfMPTCanTransfer`
+### 3.6.2. canTransfer
 
-### 3.6.2. checkMPTTxAllowed
+`canTransfer(view, mptIssue, from, to, waive = No)` checks whether `to` may receive the MPT from `from`.
 
-Used for transactions involving MPTs that are not strictly DEX operations.
+**Used by**: holder-to-holder MPT payments (`MPTEndpointStep`, `Payment`), `CheckCash`/`CheckCreate`, `EscrowCreate`, Vault and Lending transactions, and offer-owner validation in `BookStep`.
 
-**Transactions using this validation**:
-- CheckCreate (when creating checks with MPT amounts)
-- AMMCreate, AMMDeposit, AMMWithdraw (when involving MPT assets)
+**Passes when any of**:
+- `waive` is `WaiveMPTCanTransfer::Yes` (recovery paths, e.g. unwinding vault or lending positions after transferability is revoked)
+- `from` or `to` is the issuer (issuer-involved minting/burning never requires `lsfMPTCanTransfer`)
+- **`lsfMPTCanTransfer` flag set** on the issuance
 
-**Validation checks performed**:
-
-Same as `checkMPTDEXAllowed` but the validation logic uses the actual transaction type instead of treating it as a DEX operation. The key difference is:
-- For DEX operations: Always treats the operation as requiring DEX permissions
-- For other transactions: Validates based on the specific transaction type's requirements
+Otherwise returns `tecNO_AUTH`. Vault shares recurse into the underlying asset's transferability.
 
 **Possible error codes**:
 
-Same as `checkMPTDEXAllowed`:
-- `tecNO_ISSUER`
-- `tecOBJECT_NOT_FOUND`
-- `tecLOCKED`
-- `tecNO_PERMISSION`
+- `tecOBJECT_NOT_FOUND`: MPTokenIssuance does not exist
+- `tecNO_AUTH`: `lsfMPTCanTransfer` flag not set and neither party is the issuer
 
-**Note**: Both functions call the same underlying `checkMPTAllowed()` function, which contains the core validation logic. The difference is in how they categorize the operation (DEX vs non-DEX) which affects whether `lsfMPTCanTrade` is required.
+### 3.6.3. canMPTTradeAndTransfer
+
+`canMPTTradeAndTransfer(view, asset, from, to)`: convenience wrapper that runs `canTrade` then `canTransfer`, returning the first failure (or `tesSUCCESS` immediately for non-MPT assets).
+
+**Used by**: AMM transactions (`AMMCreate`, `AMMDeposit`, `AMMWithdraw`), which require both DEX tradability and transferability.
 
 # 4. MPT Payment Execution
 

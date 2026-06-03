@@ -60,8 +60,8 @@ There are two overloaded versions:
 1. **Simple version**: Takes a direct fraction value[^get-rounded-lp-tokens-simple] - used by [`equalDepositLimit`](deposit.md#411-equaldepositlimit-pseudo-code), [`equalWithdrawLimit`](withdraw.md#421-equalwithdrawlimit-pseudo-code)
 2. **Callback version**: Takes lambda callbacks for delayed evaluation[^get-rounded-lp-tokens-callback] - used by [`singleDepositEPrice`](deposit.md#531-singledepositeprice-pseudo-code), [`singleWithdrawEPrice`](withdraw.md#531-singlewithdraweprice-pseudo-code)
 
-[^get-rounded-lp-tokens-simple]: Simple version of `getRoundedLPTokens`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L292-L304)
-[^get-rounded-lp-tokens-callback]: Callback version of `getRoundedLPTokens`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L307-L327)
+[^get-rounded-lp-tokens-simple]: Simple version of `getRoundedLPTokens`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L319-L331)
+[^get-rounded-lp-tokens-callback]: Callback version of `getRoundedLPTokens`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L334-L354)
 
 The callback version exists to avoid redundant calculations when the input depends on complex intermediate calculations. The lambdas delay evaluation so that:
 - If `fixAMMv1_3` is disabled, only `noRoundCb()` is called
@@ -70,8 +70,8 @@ This prevents computing expensive formulas twice. For simple proportional operat
 
 The `Number` class uses thread-local global state for its rounding mode[^number-thread-local-mode]. When `NumberRoundModeGuard` sets the rounding mode, all subsequent `Number` arithmetic operations automatically use that mode. The callbacks perform operations like `amountDeposit / ePrice` where both operands are `STAmount` values that implicitly convert to `Number`[^stamount-to-number-conversion], so the division respects the global rounding mode without needing to pass the mode as a parameter.
 
-[^number-thread-local-mode]: Thread-local rounding mode in `Number` class: [`Number.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/basics/Number.h#L185)
-[^stamount-to-number-conversion]: `STAmount` to `Number` conversion operator: [`STAmount.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STAmount.h#L500-L509)
+[^number-thread-local-mode]: Thread-local rounding mode in `Number` class: [`Number.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/basics/Number.h#L538)
+[^stamount-to-number-conversion]: `STAmount` to `Number` conversion operator: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L524-L533)
 
 ### 2.1.1. getRoundedLPTokens (Simple) Pseudo-Code
 
@@ -123,7 +123,7 @@ def getRoundedLPTokens(
 
 Adjust LP tokens to account for precision loss when updating the balance.[^adjust-lp-tokens]
 
-[^adjust-lp-tokens]: `adjustLPTokens`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L154-L165)
+[^adjust-lp-tokens]: `adjustLPTokens`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L182-L190)
 
 This is a low-level helper function that handles a precision issue. When adding or removing a small amount to a very large pool balance, precision is lost when using `Number` - the resulting balance may be less than the actual sum would be with infinite precision.
 
@@ -151,8 +151,8 @@ There are two overloaded versions:
 1. **Simple version**: Takes a direct fraction value[^get-rounded-asset-simple] - used for proportional deposits/withdrawals
 2. **Callback version**: Takes lambda callbacks for delayed evaluation[^get-rounded-asset-callback] - used for complex single-asset calculations
 
-[^get-rounded-asset-simple]: Simple version of `getRoundedAsset`: [`AMMHelpers.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/AMMHelpers.h#L658-L673)
-[^get-rounded-asset-callback]: Callback version of `getRoundedAsset`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L274-L289)
+[^get-rounded-asset-simple]: Simple version of `getRoundedAsset`: [`AMMHelpers.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/helpers/AMMHelpers.h#L623-L638)
+[^get-rounded-asset-callback]: Callback version of `getRoundedAsset`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L301-L316)
 
 Please refer to [`getRoundedLPTokens`](#21-getroundedlptokens) for the reasoning and the explanation behind the callback version.
 
@@ -202,7 +202,7 @@ def getRoundedAsset(
 
 Adjust LP tokens for deposits (outgoing from AMM).[^adjust-lp-tokens-out]
 
-[^adjust-lp-tokens-out]: `adjustLPTokensOut`: [`AMMDeposit.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMDeposit.cpp#L648-L656)
+[^adjust-lp-tokens-out]: `adjustLPTokensOut`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L623-L631)
 
 This wrapper function applies precision adjustments specifically for deposit operations. It calls [`adjustLPTokens`](#22-adjustlptokens) with `isDeposit=True`, ensuring downward rounding that slightly reduces the LP tokens issued to depositors.
 
@@ -221,7 +221,7 @@ def adjustLPTokensOut(rules, lptAMMBalance, lpTokensDeposit):
 
 Adjust LP tokens for withdrawals (incoming to AMM).[^adjust-lp-tokens-in]
 
-[^adjust-lp-tokens-in]: `adjustLPTokensIn`: [`AMMWithdraw.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L725-L734)
+[^adjust-lp-tokens-in]: `adjustLPTokensIn`: [`AMMWithdraw.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L712-L721)
 
 This wrapper function applies precision adjustments specifically for withdrawal operations. It calls [`adjustLPTokens`](#22-adjustlptokens) with `isDeposit=False`.
 
@@ -240,7 +240,7 @@ def adjustLPTokensIn(rules, lptAMMBalance, lpTokensWithdraw, withdrawAll):
 
 Adjust asset deposit amount and LP tokens to handle rounding edge cases.[^adjust-asset-in-by-tokens]
 
-[^adjust-asset-in-by-tokens]: `adjustAssetInByTokens`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L330-L353)
+[^adjust-asset-in-by-tokens]: `adjustAssetInByTokens`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L357-L380)
 
 This function is used by single-asset deposit operations to handle a precision edge case. When a user specifies a deposit amount, the system calculates LP tokens using [`lpTokensOut`](#321-lptokensout-equation-3) (Equation 3), then adjusts those tokens with [`adjustLPTokens`](#22-adjustlptokens). However, when we reverse the calculation using [`ammAssetIn`](#322-ammassetin-equation-4) (Equation 4) to verify the deposit amount, rounding can cause the calculated amount to exceed the user's original deposit amount.
 
@@ -291,7 +291,7 @@ Swap formulas are used when trading assets through the AMM pool.
 
 Calculate output amount given a specific input amount.[^swap-asset-in] It answers the question: "If I provide X amount of input asset, how much output asset do I receive?"
 
-[^swap-asset-in]: `swapAssetIn`: [`AMMHelpers.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/AMMHelpers.h#L444-L504)
+[^swap-asset-in]: `swapAssetIn`: [`AMMHelpers.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/helpers/AMMHelpers.h#L424-L477)
 
 This function uses the formula `out = B - (A * B) / (A + in * (1 - fee))`, but with rounding at every step to protect the AMM pool. Used by [`BookStep`](../flow/steps.md#54-amm-integration) in the payment engine when consuming AMM liquidity. The function rounds downward, ensuring the pool gives out slightly less than the theoretical amount to protect against precision-based value leakage.
 
@@ -330,7 +330,7 @@ def swapAssetIn(
 
 Calculate required input amount for a specific desired output.[^swap-asset-out] It answers the question: "If I want to receive Y amount of output asset, how much input asset must I provide?"
 
-[^swap-asset-out]: `swapAssetOut`: [`AMMHelpers.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/AMMHelpers.h#L517-L577)
+[^swap-asset-out]: `swapAssetOut`: [`AMMHelpers.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/helpers/AMMHelpers.h#L490-L543)
 
 This is the inverse of [`swapAssetIn`](#311-swapassetin). It uses the formula `in = ((A * B) / (B - out) - A) / (1 - fee)` to determine how much input is needed to extract a specific output amount while maintaining the pool ratio. Used by [`BookStep`](../flow/steps.md#54-amm-integration) when the payment engine needs to deliver a specific amount.
 
@@ -403,11 +403,11 @@ rippled --unittest=AMMCalc --unittest-arg "swapout,A(USD(1000),EUR(10000)),EUR(5
 
 Calculate an AMM offer size such that after the swap, the pool's reserve ratio equals a target quality (typically the best CLOB offer quality).[^change-spot-price-quality]
 
-[^change-spot-price-quality]: `changeSpotPriceQuality`: [`AMMHelpers.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/AMMHelpers.h#L311-L419)
+[^change-spot-price-quality]: `changeSpotPriceQuality`: [`AMMHelpers.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/helpers/AMMHelpers.h#L302-L399)
 
 This function is called from `AMMLiquidity::getOffer()` during single-path pathfinding when integrating AMM and CLOB (Central Limit Order Book) liquidity.[^amm-liquidity-get-offer] When a CLOB quality is available for comparison, this function sizes the AMM offer so that consuming it would move the AMM's spot price to match the best CLOB offer quality.
 
-[^amm-liquidity-get-offer]: AMMLiquidity getOffer usage: [`AMMLiquidity.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/AMMLiquidity.cpp#L193-L194)
+[^amm-liquidity-get-offer]: AMMLiquidity getOffer usage: [`AMMLiquidity.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/AMMLiquidity.cpp#L211-L212)
 
 When one side of the pool is XRP, the algorithm calculates the XRP side first (whether that's takerGets or takerPays), then derives the other side from it. This differs from IOU-only or MPT pools where takerPays is calculated first. 
 
@@ -436,7 +436,7 @@ def changeSpotPriceQuality(
 
 Calculate AMM offer starting with takerGets (output) when takerGets is XRP.[^get-amm-offer-start-with-taker-gets]
 
-[^get-amm-offer-start-with-taker-gets]: `getAMMOfferStartWithTakerGets`: [`AMMHelpers.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/AMMHelpers.h#L176-L220)
+[^get-amm-offer-start-with-taker-gets]: `getAMMOfferStartWithTakerGets`: [`AMMHelpers.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/helpers/AMMHelpers.h#L175-L215)
 
 **Two scenarios considered:**
 
@@ -596,7 +596,7 @@ def getAMMOfferStartWithTakerPays(pool, targetQuality, tfee):
 
 Calculate LP tokens to receive for a single-asset deposit.[^lp-tokens-out]
 
-[^lp-tokens-out]: `lpTokensOut`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L26-L47)
+[^lp-tokens-out]: `lpTokensOut`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L63-L82)
 
 ```
 t1 = [R - (sqrt(f2^2 + R/f1) - f2)] / [1 + (sqrt(f2^2 + R/f1) - f2)]
@@ -651,7 +651,7 @@ def lpTokensOut(
 
 Calculate required asset deposit for desired LP tokens.[^amm-asset-in]
 
-[^amm-asset-in]: `ammAssetIn`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L60-L86)
+[^amm-asset-in]: `ammAssetIn`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L95-L118)
 
 Equation 4 is the inverse of Equation 3 (lpTokensOut). We solve Equation 3 for the asset deposit ratio `R = assetDeposit / assetBalance`.
 
@@ -764,7 +764,7 @@ def ammAssetIn(
 
 Calculate LP tokens to redeem for a single-asset withdrawal.[^lp-tokens-in]
 
-[^lp-tokens-in]: `lpTokensIn`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L92-L113)
+[^lp-tokens-in]: `lpTokensIn`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L124-L143)
 
 ```
 t = T * (c - sqrt(c^2 - 4R)) / 2
@@ -807,7 +807,7 @@ def lpTokensIn(
 
 Calculate asset withdrawal for redeeming LP tokens.[^amm-asset-out]
 
-[^amm-asset-out]: `ammAssetOut`: [`AMMHelpers.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/misc/detail/AMMHelpers.cpp#L125-L145)
+[^amm-asset-out]: `ammAssetOut`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L155-L173)
 
 Equation 8 is the inverse of Equation 7 (lpTokensIn). We solve Equation 7 for the asset withdrawal amount.
 

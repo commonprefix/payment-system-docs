@@ -34,7 +34,7 @@ AMM helpers use **token** as a subject in many function names. This refers to an
 
 The `applyGuts` function[^applyGuts] is the main entry point for processing AMMWithdraw transactions. It retrieves the AMM ledger entry and the withdrawer's LP token balance, determines how many LP tokens to redeem (all tokens for `tfWithdrawAll`/`tfOneAssetWithdrawAll`, or the specified amount from `LPTokenIn`), then adjusts the LP token balance for precision if needed. The function gets the current pool balances and determines which trading fee applies to the withdrawer (regular or discounted for [auction slot holders](#3-gettradingfee)). Based on the transaction flags and provided fields, it dispatches to one of five withdrawal mode handlers (implementing seven total modes): two [multi-asset modes](#4-multi-asset-withdrawal-modes) that maintain proportional withdrawals, and three [single-asset modes](#5-single-asset-withdrawal-modes) that perform single-sided withdrawals. Each mode handler calculates the withdrawal amounts and LP tokens to burn, then calls the [common withdraw function](#6-common-withdraw-function) to execute the actual asset transfers and update the pool state. After the withdrawal, if the pool is empty (zero LP tokens), the function attempts to delete the AMM account - if successful, the AMM is fully removed; if incomplete due to remaining trust lines, the AMM remains in an empty state with the LP token balance set to zero.
 
-[^applyGuts]: AMMWithdraw::applyGuts: [AMMWithdraw.cpp](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L298-L421)
+[^applyGuts]: AMMWithdraw::applyGuts: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L307-L422)
 
 ## 2.1. applyGuts Pseudo-Code
 
@@ -186,7 +186,7 @@ The modes are:
 
 Proportional withdrawal of pool assets for the amount of LP tokens.[^equalWithdrawTokens]
 
-[^equalWithdrawTokens]: AMMWithdraw::equalWithdrawTokens: [AMMWithdraw.cpp](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L804-L887)
+[^equalWithdrawTokens]: AMMWithdraw::equalWithdrawTokens: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L790-L871)
 
 This function handles two related modes. With `tfLPToken`, the user specifies the exact number of LP tokens to redeem using `LPTokenIn`, and the function calculates the proportional amounts of both assets to withdraw. With `tfWithdrawAll`, the user redeems their entire LP token balance without specifying an amount. The function handles a special case when withdrawing all LP tokens from the pool (`lpTokensWithdraw == lptAMMBalance`), which empties the pool completely. For partial withdrawals, it calculates the pool fraction (`frac = tokensAdj / lptAMMBalance`), then multiplies each asset balance by this fraction, rounding down with [`getRoundedAsset`](helpers.md#23-getroundedasset) to ensure the pool retains sufficient assets.
 
@@ -293,7 +293,7 @@ def equalWithdrawTokens(
 
 The user specifies maximum amounts they want to withdraw for both assets (`Amount` and `Amount2`).[^equalWithdrawLimit] Since the withdrawal must maintain the pool's ratio, the function cannot simply use both maximum amounts - one will typically be limiting while the other has excess.
 
-[^equalWithdrawLimit]: AMMWithdraw::equalWithdrawLimit: [AMMWithdraw.cpp](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L915-L980)
+[^equalWithdrawLimit]: AMMWithdraw::equalWithdrawLimit: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L899-L961)
 
 The function tries two strategies to maximize the withdrawal within the user's constraints. First, it attempts to withdraw all of `Amount` by calculating the pool fraction this represents (`frac = Amount / amountBalance`), converting this to LP tokens with proper rounding, then recalculating the fraction from the rounded LP tokens (`frac = adjustFracByTokens(...)`) to ensure precision consistency. Using this adjusted fraction, it calculates the proportional amount2 needed. If this amount2 fits within `Amount2`, the withdrawal proceeds immediately.
 
@@ -413,7 +413,7 @@ Single-asset withdrawal modes allow users to withdraw only one asset instead of 
 
 The user specifies `Amount` (the asset amount to withdraw) and the function calculates how many LP tokens must be redeemed.[^singleWithdraw] Since this is a single-asset withdrawal that changes the pool ratio, a [trading fee](#3-gettradingfee) applies. The function uses [`lpTokensIn`](helpers.md#331-lptokensin-equation-7) (Equation 7) to calculate the LP tokens based on the withdrawal amount and trading fee, then adjusts the result for precision with [`adjustLPTokensIn`](helpers.md#25-adjustlptokensin-withdrawals). The adjusted tokens are passed to `adjustAssetOutByTokens` to recalculate the withdrawal amount, ensuring the reverse calculation produces consistent results and doesn't underpay the user due to rounding.
 
-[^singleWithdraw]: AMMWithdraw::singleWithdraw: [AMMWithdraw.cpp](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L988-L1024)
+[^singleWithdraw]: AMMWithdraw::singleWithdraw: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L969-L1007)
 
 ### 5.1.1. singleWithdraw Pseudo-Code
 
@@ -467,7 +467,7 @@ def singleWithdraw(
 
 Withdraw a single asset by redeeming specified LP tokens.[^singleWithdrawTokens]
 
-[^singleWithdrawTokens]: AMMWithdraw::singleWithdrawTokens: [AMMWithdraw.cpp](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L1037-L1069)
+[^singleWithdrawTokens]: AMMWithdraw::singleWithdrawTokens: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L1020-L1051)
 
 This function handles the reverse calculation from [`singleWithdraw`](#51-singlewithdraw-tfsingleasset): the user specifies the exact number of LP tokens to redeem (using `LPTokenIn` for tfOneAssetLPToken, or all LP tokens for tfOneAssetWithdrawAll), and the function calculates the withdrawal amount of a single asset. The user can provide `Amount` as a minimum constraint on how much they expect to receive.
 
@@ -589,7 +589,7 @@ def singleWithdrawEPrice(
 
 The `withdraw()` function[^withdraw] serves as the final common pathway for all withdrawal modes, executing the actual asset transfers after mode-specific handlers determine the withdrawal amounts.
 
-[^withdraw]: AMMWithdraw::withdraw: [AMMWithdraw.cpp](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/AMMWithdraw.cpp#L471-L722)
+[^withdraw]: AMMWithdraw::withdraw: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L472-L709)
 
 This function orchestrates a sequenced validation and execution flow. It begins by verifying the withdrawer holds sufficient LP tokens to redeem, then enforces pool integrity constraints that prevent malformed states. 
 

@@ -146,7 +146,7 @@ When `build_path` is `true`:
 
 **Static validation**[^static-validation]
 
-[^static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L53-L62), [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L66-L77), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L81-L245)
+[^static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L86-L93), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L97-L109), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L113-L272)
 
 Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) and [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) is enabled:
 
@@ -177,9 +177,9 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 
 **Validation against the ledger view**[^preclaim-validation]
 
-[^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L249-L285), [`preclaim`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L288-L385)
-[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L126)
-[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L216-L238)
+[^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L276-L312), [`preclaim`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L315-L402)
+[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L160)
+[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L247-L266)
 
 - Destination account does not exist:
     - `tecNO_DST`: payment is not XRP
@@ -208,7 +208,7 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 
 **Direct XRP Payments:**[^direct-xrp-payment]
 
-[^direct-xrp-payment]: Direct XRP payment execution: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L607-L698)
+[^direct-xrp-payment]: Direct XRP payment execution: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L594-L679)
 
 - `tefINTERNAL`: Source account does not exist.
 - `tecUNFUNDED_PAYMENT`: Source account cannot send the payment because doing it would leave it with insufficient funds

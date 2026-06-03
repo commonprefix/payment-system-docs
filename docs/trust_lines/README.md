@@ -294,10 +294,10 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
       - The source account's NoRipple flag (`lsfLowNoRipple` or `lsfHighNoRipple`) is set if the TrustSet transaction contains `tfSetNoRipple` and not `tfClearNoRipple`[^trustcreate-noripple-src].
       - The destination account's NoRipple flag is set if the destination account does **not** have `lsfDefaultRipple` on their account[^trustcreate-noripple-dst]. `lsfDefaultRipple` is an account-level flag set via AccountSet (`asfDefaultRipple`). When an issuer sets `lsfDefaultRipple`, new trust lines are created without NoRipple on the issuer's side, allowing rippling by default.
 
-[^modify-then-delete]: Default state check and deletion after modification: [`SetTrust.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/SetTrust.cpp#L655-L661)
-[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1492-L1509)
-[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1492-L1495)
-[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L1505-L1509)
+[^modify-then-delete]: Default state check and deletion after modification: [`SetTrust.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/TrustSet.cpp#L595-L600)
+[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L281)
+[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L267)
+[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L277-L281)
 
 
 - `DirectoryNode` object is **created or modified**:

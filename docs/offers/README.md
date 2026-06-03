@@ -154,9 +154,9 @@ Alice is willing to buy 100 XRP for her 20 USD. Bob is willing to sell his 100 X
 - Alice will get 100 XRP and pay 20 USD. This is the exchange rate that she offered.
 - Bob will get 20 USD and pay 100 XRP. Because he was selling all of his 100 XRP, he got 20 USD for it. He sold his XRP for a better exchange rate than he hoped for.
 
-[^cMaxNative]: XRP maximum native value: [`STAmount.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STAmount.h#L52)
-[^cMaxValue-iou]: IOU maximum value halved for transfer rate: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L417-L420)
-[^maxMPTokenAmount-mpt]: MPT maximum amount halved for transfer rate: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L423), maximum defined in [`Protocol.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/Protocol.h#L99)
+[^cMaxNative]: XRP maximum native value: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
+[^cMaxValue-iou]: IOU maximum value halved for transfer rate: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L436-L437)
+[^maxMPTokenAmount-mpt]: MPT maximum amount halved for transfer rate: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L440), maximum defined in [`Protocol.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L233)
 
 ### 1.2.2. Auto-bridging
 
@@ -170,7 +170,7 @@ Auto-bridging is used:
 
 The Flow engine evaluates both paths and selects the one(s) providing the best quality, allowing offers to execute through whichever route offers better pricing.
 
-[^auto-bridging-path]: Auto-bridging path construction: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L394-L396)
+[^auto-bridging-path]: Auto-bridging path construction: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L410-L412)
 
 ### 1.2.3. Creating the Residual Offer
 
@@ -196,9 +196,9 @@ The transfer rate is read from the issuer's settings (AccountRoot `TransferRate`
 - If the offer is not filled at all, the original offer is recorded on the ledger
 - If, after partial filling, the signing account no longer has a positive balance in the `takerGets` currency, the remaining offer is not created[^no-balance-no-offer]
 
-[^buy-offer-residual]: Buy offer residual calculation: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L511-L518)
-[^sell-offer-residual]: Sell offer residual calculation: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L486-L504)
-[^no-balance-no-offer]: No balance check after crossing: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L464-L470)
+[^buy-offer-residual]: Buy offer residual calculation: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L527-L533)
+[^sell-offer-residual]: Sell offer residual calculation: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L501-L520)
+[^no-balance-no-offer]: No balance check after crossing: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L480-L486)
 
 ## 1.3. Rate Calculation
 
@@ -355,7 +355,7 @@ The first 192 bits are the first 192 bits of [SHA512-Half](https://xrpl.org/docs
 
 The Book directory space key (`BOOK_DIR`) is `0x0042`. For XRP, the currency code is 160 bits of zeros and the issuer is 160 bits of zeros. The `domainID` is included only when specified (for permissioned domains).
 
-[^book-dir-hash]: Book directory hash computation: [`Indexes.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/protocol/Indexes.cpp#L96-L143)
+[^book-dir-hash]: Book directory hash computation: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L102-L141)
 
 The last 64 bits encode the exchange rate (`takerPays / takerGets`) as a 64-bit value in big-endian format.
 
@@ -498,10 +498,10 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 - `tecNO_ISSUER`: MPT validation failure (see below)
 - `tecLOCKED`: MPT validation failure (see below)
 
-**MPT-specific validations**: When either `takerPays` or `takerGets` is an MPT, the transaction is validated using [`checkMPTDEXAllowed`](../mpts/README.md#361-checkmptdexallowed). See [MPT Validation Functions](../mpts/README.md#36-mpt-validation-functions) for complete details on validation logic and error conditions.
+**MPT-specific validations**: When either `takerPays` or `takerGets` is an MPT, the transaction is validated using [`canTrade`](../mpts/README.md#361-cantrade). See [MPT Validation Functions](../mpts/README.md#36-mpt-validation-functions) for complete details on validation logic and error conditions.
 
-[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L286-L287)
-[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L319-L323), [`View.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/libxrpl/ledger/View.cpp#L2646-L2670)
+[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
+[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
 
 **Validation during doApply:**
 
