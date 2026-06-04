@@ -237,6 +237,8 @@ If `OfferSequence` is provided:
 
 This mechanism is useful for updating an existing offer without the risk of having both the old and new offers active simultaneously.
 
+A domain or hybrid offer (one that sets `DomainID`) can use `OfferSequence` to cancel the signing account's own regular (non-domain) offer; see [State Changes](#3112-state-changes) for the amendment-gated details.
+
 ## 1.5. Permissioned DEX
 
 PermissionedDomains enable credential-based access control for offers. When the `DomainID` field is specified in an OfferCreate transaction, the offer is placed in a domain-specific order book that only domain members can access. See [PermissionedDomains documentation](../permissioned_domains/README.md) for details on domain creation and access control.
@@ -504,6 +506,7 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 [^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
 [^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
 [^domainid-zero]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L99-L101)
+[^domain-cancel-regular]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L41-L43), [finalize](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L105-L111)
 
 **Validation during doApply:**
 
@@ -515,6 +518,7 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 
 - `Offer` object is **deleted**:
     - If `OfferSequence` field is specified and the offer with that sequence exists, it is deleted. See [OfferCancel State Changes](#3122-state-changes) for details on the deletion process
+    - When the new offer sets `DomainID` (a domain or hybrid offer), the offer cancelled via `OfferSequence` may be the signing account's own regular (non-domain) offer. Under the `fixCleanup3_2_0` amendment this is permitted; before the amendment the `ValidPermissionedDEX` invariant treated the deleted regular offer as a violation and failed the transaction with `tecINVARIANT_FAILED`.[^domain-cancel-regular]
 
 
 - `Offer` object is **not created**:
