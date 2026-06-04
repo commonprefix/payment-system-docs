@@ -65,14 +65,16 @@ The domain owner always has access to their own domain. All other participants m
 
 **Domain ID Calculation**: `hash(PERMISSIONED_DOMAIN_NAMESPACE, owner_account, creation_sequence)`
 
-The domain ID is computed at creation using the owner's account and the transaction sequence, making it immutable and globally unique.
+The domain ID is computed at creation using the owner's account and the sequence number consumed by the creating transaction. This can be `Sequence`, or its `TicketSequence` when submitted via a Ticket[^pd-seq].
+
+[^pd-seq]: Domain ID and the stored `Sequence` use the transaction's effective sequence (ticket-aware) under the `fixCleanup3_1_3` amendment: [`PermissionedDomainSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/permissioned_domain/PermissionedDomainSet.cpp#L113-L115)
 
 ### 2.1.2. Fields
 
 | Field Name            | Type      | Required           | Description                                   |
 |-----------------------|-----------|--------------------|-----------------------------------------------|
 | `Owner`               | AccountID | :heavy_check_mark: | The account that owns this domain             |
-| `Sequence`            | UInt32    | :heavy_check_mark: | Domain creation sequence (from transaction)   |
+| `Sequence`            | UInt32    | :heavy_check_mark: | Sequence consumed by the creating transaction (`Sequence`, or `TicketSequence` if ticketed) |
 | `AcceptedCredentials` | Array     | :heavy_check_mark: | Credentials that grant domain access (max 10) |
 | `OwnerNode`           | UInt64    | :heavy_check_mark: | Owner directory page index                    |
 | `PreviousTxnID`       | Hash256   | :heavy_check_mark: | Previous transaction hash                     |
@@ -162,7 +164,7 @@ Creates a new PermissionedDomain (when DomainID is omitted) or updates an existi
 **If DomainID is omitted (creation)**:
 - `PermissionedDomain` object is **created** with:
   - `Owner`: set to Account
-  - `Sequence`: set to transaction sequence
+  - `Sequence`: set to the transaction's effective sequence (its `Sequence`, or `TicketSequence` if ticketed)
   - `AcceptedCredentials`: sorted credentials array
   - `OwnerNode`: page index in owner directory
 - `Owner`'s owner count is **incremented** by 1
