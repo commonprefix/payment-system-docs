@@ -118,6 +118,10 @@ When present on an Offer ledger entry, this field indicates the offer exists in 
 - `BookDirectory` (Hash256): Order book directory hash
 - `BookNode` (UInt64): Page index within the directory
 
+Under the `fixCleanup3_2_0` amendment, when a hybrid offer partially crosses on placement, the open-book `BookDirectory` listed here is keyed by the offer's original placement rate, so it shares the same quality (`ExchangeRate`) as the primary domain `BookDirectory`. Before the amendment the open-book directory was keyed from the post-crossing amounts and could differ slightly due to rounding.[^pd-hybrid-rate]
+
+[^pd-hybrid-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
+
 # 3. Transactions
 
 ## 3.1. PermissionedDomainSet Transaction
@@ -241,7 +245,9 @@ Function: accountInDomain(view, account, domainID)
 4. Return FALSE
 ```
 
-**Expiration Check**: Credential expiration is compared against the ledger's `parentCloseTime`. Expired credentials are treated as if they don't exist for domain access purposes.
+**Expiration Check**: Credential expiration is compared against the ledger's `parentCloseTime`. Expired credentials are treated as if they don't exist for domain access purposes. During transaction apply, an expired credential encountered while verifying domain membership is also deleted to reclaim its reserve; under the `fixCleanup3_1_3` amendment, if that deletion fails the transaction halts and returns the propagated error (e.g. `tecINTERNAL`) instead of continuing the membership check.[^pd-expiry-delete]
+
+[^pd-expiry-delete]: [`removeExpired`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65), [`verifyValidDomain`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L332-L334)
 
 **Performance**: Verification iterates through the domain's AcceptedCredentials array (max 10 entries), performing one ledger lookup per credential until a valid match is found.
 

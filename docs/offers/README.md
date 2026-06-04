@@ -457,6 +457,7 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
       but [PermissionedDex](https://xrpl.org/resources/known-amendments#permissioneddex) amendment is not enabled or
       field `DomainID` is not present in the transaction.
     - both `tfImmediateOrCancel` and `tfFillOrKill` flags are specified.
+- `temMALFORMED`: field `DomainID` is present but is all zeros. User should omit the field if they do not want to specify a domain. Enforced under the `fixCleanup3_2_0` amendment.[^domainid-zero]
 - `temBAD_EXPIRATION`: `Expiration` field is set to `0`. User should omit the field if they do not want to specify it.
 - `temBAD_SEQUENCE`: `OfferSequence` is set to `0`. User should omit the field if they do not want to specify an offer to delete first.
 - `temBAD_AMOUNT`: either `takerPays` or `takerGets` specifies XRP, but with mantissa bigger than `100000000000000000ull`.
@@ -502,6 +503,7 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 
 [^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
 [^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
+[^domainid-zero]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L99-L101)
 
 **Validation during doApply:**
 

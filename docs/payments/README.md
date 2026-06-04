@@ -157,6 +157,7 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 - `temMALFORMED`:
     - `sfCredentialIDs` array is empty or exceeds maximum size of 8. To leave credential IDs out, leave out the entire field.
     - `sfCredentialIDs` array contains duplicate credential IDs
+    - `sfDomainID` is present but is all zeros. To omit the domain, leave out the entire field. Enforced under the `fixCleanup3_2_0` amendment.[^domainid-zero]
 - `temBAD_AMOUNT`:
     - `Amount` is XRP and mantissa is bigger than `100000000000000000ull`.
     - `SendMax` is XRP and mantissa is bigger than `100000000000000000ull`.[^isLegalNet-sendmax]
@@ -180,6 +181,7 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 [^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L276-L312), [`preclaim`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L315-L402)
 [^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L160)
 [^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L247-L266)
+[^domainid-zero]: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L128-L132)
 
 - Destination account does not exist:
     - `tecNO_DST`: payment is not XRP

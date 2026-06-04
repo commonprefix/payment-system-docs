@@ -390,7 +390,9 @@ The sender includes the hashes of credentials they hold. During transaction proc
 4. Checks that the `(issuer, credentialType)` pairs of all supplied credentials together form a set that exactly matches one of the destination's credential `DepositPreauth` entries
 5. Each supplied credential must exist, belong to the sender, and have `lsfAccepted` set (else `tecBAD_CREDENTIALS`); and must not be expired (else `tecEXPIRED`)
 
-Supplying `CredentialIDs` is itself constrained: if any listed credential is expired, the transaction fails with `tecEXPIRED` before the deposit-authorization checks run, and this applies to any transaction that carries `CredentialIDs` (Payment, EscrowFinish, etc.), even when the destination does not require deposit authorization.
+Supplying `CredentialIDs` is itself constrained: if any listed credential is expired, the transaction fails with `tecEXPIRED` before the deposit-authorization checks run, and this applies to any transaction that carries `CredentialIDs` (Payment, EscrowFinish, etc.), even when the destination does not require deposit authorization. The expired credential is also deleted as part of this (recovering its reserve), even though the transaction fails. Under the `fixCleanup3_1_3` amendment, if that deletion itself fails, the transaction halts and returns the deletion's error (e.g. `tecINTERNAL`) instead of `tecEXPIRED`.[^5]
+
+[^5]: [`CredentialHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65)
 
 **Example Flow**:
 
