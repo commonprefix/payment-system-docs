@@ -26,9 +26,9 @@
 
 # 1. Introduction
 
-PermissionedDomains enable credential-based access control for decentralized exchange activity on the XRP Ledger. A domain owner creates a PermissionedDomain specifying which credentials are required, and only accounts holding those credentials can place offers within that domain. This creates segregated order books where trading activity is restricted to authorized participants.
+PermissionedDomains enable credential-based access control for decentralized exchange activity on the XRP Ledger. A domain owner creates a PermissionedDomain specifying which credentials are required, and only accounts holding those credentials can place offers within that domain. This creates segregated order books where trading activity is restricted to authorized participants. Domain restrictions also apply to cross-currency payments that carry a `DomainID`, both the sender and receiver must be in the domain (see [§4.1 Domain Membership](#41-domain-membership)).
 
-Domain offers support all asset types available on the XRP Ledger: XRP, tokens (issued currencies), and MPTs (Multi-Purpose Tokens). Any trading pair can be restricted to a permissioned domain.
+Domain offers support all asset types available on the XRP Ledger: XRP, tokens (issued currencies), and MPTs (Multi-Purpose Tokens, which require the `MPTokensV2` amendment). Any trading pair can be restricted to a permissioned domain. Note that domain offers cross only against the permissioned limit order book; automated market maker (AMM) pools are not consulted for domain crossing.[^amm-no-domain]
 
 For example, a securities exchange creates a PermissionedDomain requiring "accredited_investor" credentials from a regulatory authority. When Alice wants to trade:
 1. Domain Setup: ExchangeAccountID submits PermissionedDomainSet with: `AcceptedCredentials=[{Issuer: RegulatorAccountID, CredentialType: "accredited_investor"}]`
@@ -38,6 +38,8 @@ For example, a securities exchange creates a PermissionedDomain requiring "accre
 5. Offer placement: Alice's offer is placed in the domain's order book, matching with other domain offers and hybrid offers
 
 The domain owner always has access to their own domain. All other participants must hold valid credentials. Credentials can be revoked (via expiration or deletion), automatically removing access without the domain owner's involvement.
+
+[^amm-no-domain]: AMM pools are not consulted when a book has a domain: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L820-L822)
 
 ## 1.1. Terminology and Concepts
 
