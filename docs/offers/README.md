@@ -48,12 +48,11 @@ When `rippled` applies an `OfferCreate`, it first invokes the payment [flow engi
 
 An offer is defined in terms of `takerGets` and `takerPays` parameters, which are named from the perspective of the taker - the party accepting the offer. If Alice creates an offer with `takerGets = 100 XRP` and `takerPays = 10 USD`, it means she is offering 100 XRP and wants to receive 10 USD in return.
 
-Alice has to have a positive amount in `takerGets` currency, unless she is the issuer of that asset (IOU issuers can issue trust line tokens on demand; MPT issuers can mint MPTs into circulation). She does not have to have the full amount to cover the offer. If her balance is lower than `takerGets`, the offer may still partially fill. 
+Alice has to have a positive amount in `takerGets` currency, unless she is the issuer of that asset (IOU issuers can issue trust line tokens on demand; MPT issuers can mint MPTs into circulation). She does not have to have the full amount to cover the offer. If her balance is lower than `takerGets`, the offer may still partially fill.
 
 ## 1.2. Offer Crossing
 
-Keeping in mind that offers are actually limit orders, once they are placed, offers can immediately be executed, 
-partially or fully. 
+Because offers are limit orders, a new offer is first matched against existing offers on the book during crossing. It can be filled fully, partially, or not at all. Only the unfilled remainder is then placed on the order book as a resting offer.
 
 Crossing is done by calling the [flow engine](../flow/README.md) and passing a set of paths. All crossings will contain
 the [default path](../path_finding/README.md#24-default-paths). If neither taker pays or taker gets is XRP, then an additional
@@ -62,9 +61,9 @@ the [default path](../path_finding/README.md#24-default-paths). If neither taker
 If transaction has `tfPassive` flag, it will only cross offers with strictly better quality than its own.
 It will not cross offers of equal quality, making it more likely to remain on the order book.
 
-If the offer is ImmediateOrCancel it will never be placed in the order book. It can be fully or partially filled during crossing, but `Offer` ledger entry will never be created for it.
+If the offer is `tfImmediateOrCancel` it will never be placed in the order book. It can be fully or partially filled during crossing, or not filled at all, but `Offer` ledger entry will never be created for it.
 
-If the offer is `tfFillOrKill` it will never be placed in the order book. It can either *fully* fill immediately or fail. 
+If the offer is `tfFillOrKill` it will never be placed in the order book. It can either *fully* fill immediately or fail.
 
 During crossing, the new offer may be fully filled, partially filled, or not filled at all by existing offers in the order book.
 
@@ -100,18 +99,17 @@ flowchart LR
 
 **Atomicity:**
 
-Offer crossing uses two `Sandbox` instances to ensure atomic state application:
-- `sb`: Contains all state changes (fee payment, offer deletions, crossing results, new offer placement)
-- `sbCancel`: Contains only fee payment and unfunded offer deletions
+The fee and sequence number are applied to the base ledger view by the transactor before offer crossing begins. Both sandboxes below are built over that base view, so the fee is recorded outside of them and persists regardless of which one is applied:
+- `sb`: the crossing results, the deletions of offers consumed or removed during crossing, and the new resting offer
+- `sbCancel`: only the cleanup of unfunded or expired offers encountered during crossing
 
-For `tfFillOrKill` offers that don't fully cross, `sbCancel` is applied instead of `sb`, ensuring the offer crossing is rolled back while preserving fee payment. See [Ledger
-Views and Sandboxes](../transactions/README.md#5-ledger-views-and-sandboxes) for details on how sandboxes provide atomic state changes.
+When the offer will not be placed (a `tfFillOrKill` offer that cannot fully cross, or a `tfImmediateOrCancel` offer that crosses nothing), `sbCancel` is applied instead of `sb`. This discards the crossing and placement work while keeping the fee and the cleanup of unfunded or expired offers. See [Ledger Views and Sandboxes](../transactions/README.md#5-ledger-views-and-sandboxes) for how sandboxes provide atomic state changes.
 
 ### 1.2.1. Sell vs Buy Offers
 
 An offer with the `tfSell` flag set is a **sell** offer. An offer without the `tfSell` flag is a **buy** offer.
 
-When selling, the offer will accept more than the specified `takerPays` amount to maximize the sale of `takerGets`. In the `rippled` implementation, `takerPays` is capped at `STAmount::cMaxNative` for XRP[^cMaxNative], `STAmount::cMaxValue / 2` for IOUs[^cMaxValue-iou], and `maxMPTokenAmount / 2` for MPTs[^maxMPTokenAmount-mpt].
+When selling, the offer will accept more than the specified `takerPays` amount to maximize the sale of `takerGets`. In the `rippled` implementation, `takerPays` is capped at `STAmount::kMaxNative` for XRP[^cMaxNative], half the maximum representable IOU value (`STAmount::kMaxValue / 2`) for IOUs[^cMaxValue-iou], and half the maximum MPT amount (`kMaxMpTokenAmount / 2`) for MPTs[^maxMPTokenAmount-mpt]. The IOU and MPT amounts are halved to leave room for the transfer fee charged during crossing: an issuer's transfer rate can be as high as 200% (a 2.0 multiplier), so capping at half the maximum keeps the crossed amount representable.[^transfer-rate-max] XRP has no transfer rate, so its cap is not halved.
 
 The following examples demonstrate offer crossing behavior when a new offer is created and crosses with existing offers in the order book.
 
@@ -122,11 +120,11 @@ Bob is willing to buy 10 USD for his 100 XRP. He does not want to buy more than 
 
 **Offers:**
 
-- Alice sends a **sell** offer:
+- Alice's **sell** offer rests on the book first:
     - Taker pays 100 XRP
     - Taker gets 20 USD
 
-- Bob sends a **buy** offer
+- Bob then submits a **buy** offer, which crosses Alice's resting offer:
     - Taker pays 10 USD
     - Taker gets 100 XRP
 
@@ -141,11 +139,11 @@ Alice is willing to buy 100 XRP for her 20 USD. Bob is willing to sell his 100 X
 
 **Offers:**
 
-- Alice sends a **buy** offer:
+- Alice's **buy** offer rests on the book first:
     - Taker pays 100 XRP
     - Taker gets 20 USD
 
-- Bob sends a **sell** offer
+- Bob then submits a **sell** offer, which crosses Alice's resting offer:
     - Taker pays 10 USD
     - Taker gets 100 XRP
 
@@ -155,75 +153,89 @@ Alice is willing to buy 100 XRP for her 20 USD. Bob is willing to sell his 100 X
 - Bob will get 20 USD and pay 100 XRP. Because he was selling all of his 100 XRP, he got 20 USD for it. He sold his XRP for a better exchange rate than he hoped for.
 
 [^cMaxNative]: XRP maximum native value: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
-[^cMaxValue-iou]: IOU maximum value halved for transfer rate: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L436-L437)
-[^maxMPTokenAmount-mpt]: MPT maximum amount halved for transfer rate: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L440), maximum defined in [`Protocol.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L233)
+[^cMaxValue-iou]: IOU maximum value halved for transfer rate: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L436-L437)
+[^maxMPTokenAmount-mpt]: MPT maximum amount halved for transfer rate: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L440), maximum defined in [`Protocol.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L234)
+[^transfer-rate-max]: IOU transfer rate capped at 2.0 (200%): [`AccountSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/account/AccountSet.cpp#L128-L131)
 
 ### 1.2.2. Auto-bridging
 
 Auto-bridging allows offers between two non-XRP currencies to execute through XRP as an intermediate currency.
 
-Auto-bridging is used:
-- Only when both `takerPays` and `takerGets` are non-XRP currencies
-- The [Flow engine](../flow/README.md) is invoked with two paths:
-  1. The [default](../path_finding/README.md#24-default-paths) direct path
-  2. An auto-bridging path with XRP as intermediate (e.g., USD -> XRP -> EUR)[^auto-bridging-path]
+Auto-bridging is used only when both `takerPays` and `takerGets` are non-XRP currencies. When it applies, the [Flow engine](../flow/README.md) is invoked with two paths:
+1. The [default](../path_finding/README.md#24-default-paths) direct path
+2. An auto-bridging path with XRP as intermediate (e.g., USD -> XRP -> EUR)[^auto-bridging-path]
 
 The Flow engine evaluates both paths and selects the one(s) providing the best quality, allowing offers to execute through whichever route offers better pricing.
 
-[^auto-bridging-path]: Auto-bridging path construction: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L410-L412)
+[^auto-bridging-path]: Auto-bridging path construction: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L410-L412)
+[^passive-threshold]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L394-L397)
 
 ### 1.2.3. Creating the Residual Offer
 
-Before the offer is sent to the Flow engine for crossing, a **quality threshold** is calculated from `takerPays` and `takerGets`. This represents the minimum exchange rate at which the offer can be crossed. If `takerGets` is a non-XRP asset (IOU or MPT) and the offer creator is not the issuer, `takerGets` is adjusted by multiplying it by the issuer's transfer rate to account for transfer fees. The quality threshold is then calculated as `takerPays / adjusted takerGets`.
+Before the offer is sent to the Flow engine for crossing, a **quality threshold** is calculated from `takerPays` and `takerGets`. This represents the minimum exchange rate at which the offer can be crossed. If `takerGets` is a non-XRP asset (IOU or MPT) and the offer creator is not the issuer, `takerGets` is adjusted by multiplying it by the issuer's transfer rate to account for transfer fees. The quality threshold is then calculated as `takerPays / adjusted takerGets`. For a passive offer (`tfPassive`), the threshold is then incremented so the offer crosses only strictly-better-quality offers.[^passive-threshold]
 
-The Flow engine returns the amount that was filled. During offer crossing, the offer owner pays transfer fees (see [BookStep transfer rates](../flow/steps.md#44-helper-functions)). The transfer fee is deducted from the owner's balance but does not reduce the offer's stated amounts. For example, if the original `takerGets` was 100 USD and 50 USD was transferred with a 2% transfer fee, the owner pays 51 USD from their balance, but the remaining offer balance is 50 USD.
+The Flow engine returns the amount that was filled. During offer crossing, the offer owner pays transfer fees (see [transfer rates in flow steps](../flow/steps.md#213-quality-functions)). The transfer fee is deducted from the owner's balance but does not reduce the offer's stated amounts. For example, if the original `takerGets` was 100 USD and 50 USD was transferred with a 2% transfer fee, the owner pays 51 USD from their balance, but the remaining offer balance is 50 USD.
 
 The transfer rate is read from the issuer's settings (AccountRoot `TransferRate` field for IOUs, or the MPTokenIssuance `TransferFee` field for MPTs) and applied identically during offer crossing, maintaining consistent offer book semantics across all asset types.
 
 **Calculating the residual offer after partial filling:**
 
+Both calculations preserve the original offer's quality, the `takerGets : takerPays` ratio, so the unfilled remainder rests at the rate the creator specified. The rate used below is `takerGets / takerPays`, the reciprocal of the `takerPays / takerGets` rate defined in [Rate Calculation](#13-rate-calculation).
+
 **Buy offers** (no `tfSell` flag):[^buy-offer-residual]
 1. Subtract consumed `takerPays` from original `takerPays`
-2. Calculate remaining `takerGets` by multiplying remaining `takerPays` by the pre-crossing exchange rate
+2. Calculate remaining `takerGets` by multiplying remaining `takerPays` by this rate
 3. Round `takerGets` up
 
 **Sell offers** (`tfSell` flag set):[^sell-offer-residual]
 1. Subtract consumed `takerGets` from original `takerGets` (accounting for transfer rates)
-2. Calculate remaining `takerPays` by dividing remaining `takerGets` by the pre-crossing exchange rate
+2. Calculate remaining `takerPays` by dividing remaining `takerGets` by this rate
 3. Round `takerPays` down
 
 **Special cases:**
-- If the offer is not filled at all, the original offer is recorded on the ledger
-- If, after partial filling, the signing account no longer has a positive balance in the `takerGets` currency, the remaining offer is not created[^no-balance-no-offer]
+- If the offer is not filled at all, the original offer is recorded on the ledger, unless it is an ImmediateOrCancel or FillOrKill offer (which are never placed) or the account lacks the reserve for a new offer[^offer-reserve]
+- If, after partial filling, the signing account no longer has a positive balance in the `takerGets` currency, the remaining offer is not created[^no-balance-no-offer]. This check is skipped when `takerGets` is an MPT and the creator is its issuer (an issuer can supply the MPT without holding a balance), so the residual offer is still created in that case
 
-[^buy-offer-residual]: Buy offer residual calculation: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L527-L533)
-[^sell-offer-residual]: Sell offer residual calculation: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L501-L520)
-[^no-balance-no-offer]: No balance check after crossing: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L480-L486)
+[^buy-offer-residual]: Buy offer residual calculation: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L527-L533)
+[^sell-offer-residual]: Sell offer residual calculation: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L501-L520)
+[^no-balance-no-offer]: No balance check after crossing: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L480-L486)
+[^offer-reserve]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L834-L844)
 
 ## 1.3. Rate Calculation
 
 The exchange rate for an offer is calculated before any crossing, so that potential partial filling does not affect the
 intended rate. The rate is calculated as `takerPays / takerGets` (smaller is better for the taker).
 
-Different asset types have different internal representations: XRP (64-bit unsigned integer), IOUs (48-bit mantissa with sign and exponent), and MPTs (64-bit unsigned integer).
+Different asset types have different internal representations:
+- **XRP**: an integer number of drops, up to `kMaxNative` (9 * 10^18 drops).[^repr-xrp]
+- **IOU**: a sign, an exponent (`-96` to `80`), and a mantissa. When non-zero, the mantissa is normalized to the range 10^15 to 10^16-1, always 16 significant decimal digits (a 54-bit value). This fixed-precision mantissa combined with a wide exponent lets an IOU represent both very large and very small amounts at 16 digits of precision.[^repr-iou]
+- **MPT**: an unsigned integer, up to `kMaxMpTokenAmount` (2^63 - 1).[^repr-mpt]
 
-`rippled` implementation normalizes the rate by packing the result into a 64-bit integer:
+`rippled` implementation normalizes the rate by packing the result into a 64-bit integer[^rate-packing]:
 - Upper 8 bits: exponent + 100
 - Lower 56 bits: mantissa
 
-In any case of an exception, like an overflow, it will return the rate `0` and not store the offer.
+`getRate` returns the rate `0` (and the offer is not stored) in three cases: when `takerGets` is zero, when the computed rate rounds to zero (the offer is 'too good' to represent), or when the computation overflows.
+
+[^repr-xrp]: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
+[^repr-iou]: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L47-L53)
+[^repr-mpt]: [`Protocol.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L234)
+[^rate-packing]: [`STAmount.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/STAmount.cpp#L459-L481)
 
 ### 1.3.1. TickSize Rounding
 
 In order to ensure that ranking of offers in order books requires a significant difference between exchange rates,
 issuers can set `TickSize` field to their account.
 
-If `TickSize` is present, all offers are rounded by truncating the rate to the specified `TickSize`. If two issuers in the offer
-have different `TickSize` set, the smaller is used. If only one has `TickSize` set, that is used. XRP never has a `TickSize`. TickSize is read from the issuer's account and applies to both IOUs and MPTs.
+`TickSize` sets the number of significant decimal digits an offer's rate is rounded to. An issuer can set it to 0 (disabled) or to a value from 3 to 16.[^ticksize-range] If `TickSize` is present, the offer's rate is rounded up to that many significant digits.[^ticksize-round] If the two assets' issuers have different `TickSize` values, the smaller is used; if only one is set, that one is used. `TickSize` applies only to IOU sides: XRP and MPTs are integral types and never carry a `TickSize`, so they do not contribute one to the rounded rate.[^ticksize-integral]
 
-After the rate is rounded, one side of the offer is adjusted to maintain the rounded rate:
-- For **sell offers** (`tfSell` flag): `takerPays` is recalculated based on the rounded rate
-- For **buy offers** (no `tfSell` flag): `takerGets` is recalculated based on the rounded rate
+After the rate is rounded, one side of the offer is recomputed from the rounded rate, but only when that side is XRP or an IOU (an MPT side is left unchanged):
+- For **sell offers** (`tfSell` flag): `takerPays` is recalculated based on the rounded rate, unless `takerPays` is an MPT
+- For **buy offers** (no `tfSell` flag): `takerGets` is recalculated based on the rounded rate, unless `takerGets` is an MPT
+
+[^ticksize-range]: [`Quality.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Quality.h#L97-L98)
+[^ticksize-round]: [`Quality.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Quality.cpp#L134-L162)
+[^ticksize-integral]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L668-L700)
 
 ## 1.4. Offer deletion
 
@@ -243,15 +255,18 @@ A domain or hybrid offer (one that sets `DomainID`) can use `OfferSequence` to c
 
 PermissionedDomains enable credential-based access control for offers. When the `DomainID` field is specified in an OfferCreate transaction, the offer is placed in a domain-specific order book that only domain members can access. See [PermissionedDomains documentation](../permissioned_domains/README.md) for details on domain creation and access control.
 
-**Open Offers** are not a part of any domain. 
+**Open Offers** are not a part of any domain.
 
 ### 1.5.1. Domain Offers
 
-A **domain offer** is an offer created with the `DomainID` field set. Domain offers are placed exclusively in the domain's order book (separate from the open order book) and can only be created by accounts with domain access (domain owner or credential holders). Domain offers only match with other domain offers and hybrid offers within the same domain, and cannot be consumed by regular (non-domain) payments or offers.
+A **domain offer** is an offer created with the `DomainID` field set. Domain offers are placed exclusively in the domain's order book (separate from the open order book) and can only be created by accounts with domain access (domain owner or credential holders). Domain offers only match with other domain offers and hybrid offers within the same domain, and cannot be consumed by regular (non-domain) payments or offers.[^domain-book-segregation]
 
 ### 1.5.2. Hybrid Offers
 
-A **hybrid offer** is an offer created with both the `DomainID` field set AND the `tfHybrid` flag enabled. Hybrid offers exist simultaneously in both the domain order book and the open order book, with a primary entry in the domain book and a secondary entry (via the `AdditionalBooks` field) in the open book. When a hybrid offer is created, it only crosses with offers in the domain book, since the `DomainID` is passed to the flow engine which uses that domain's order book. Once the hybrid offer is resting on the books, it can be consumed by both domain payments/offers (via the domain book entry) and open payments/offers (via the open book entry).
+A **hybrid offer** is an offer created with both the `DomainID` field set AND the `tfHybrid` flag enabled. Hybrid offers exist simultaneously in both the domain order book and the open order book, with a primary entry in the domain book and a secondary entry (via the `AdditionalBooks` field) in the open book. When a hybrid offer is created, it only crosses with offers in the domain book, since the `DomainID` is passed to the flow engine which uses that domain's order book. Once the hybrid offer is resting on the books, it can be consumed by both domain payments/offers (via the domain book entry) and open payments/offers (via the open book entry).[^hybrid-books]
+
+[^domain-book-segregation]: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L102-L110)
+[^hybrid-books]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L560-L602)
 
 # 2. Ledger Entries
 
@@ -268,13 +283,13 @@ When an offer is created, it stores references to both its book directory (`sfBo
 
 **Order Book Segregation:**
 
-The XRP Ledger maintains separate order book directories based on domain participation:
+The XRP Ledger maintains separate order book directories based on domain participation[^domain-book-segregation]:
 
-- **Open Order Books**: Standard directories without domain restrictions, computed as `hash(BOOK_NAMESPACE, asset_in, asset_out)`. Contains open offers and hybrid offers (via AdditionalBooks references). All accounts can create open offers.
+- **Open Order Books**: Standard directories without domain restrictions, computed as `hash(LedgerNameSpace::BookDir, asset_in, asset_out)`. Contains open offers and hybrid offers (via AdditionalBooks references). All accounts can create open offers.
 
-- **Domain Order Books**: Separate directories for permissioned domains, computed as `hash(BOOK_NAMESPACE, asset_in, asset_out, domainID)`. Contains domain offers (primary entries) and hybrid offers (primary entries). Only domain members can create offers in domain order books.
+- **Domain Order Books**: Separate directories for permissioned domains, computed as `hash(LedgerNameSpace::BookDir, asset_in, asset_out, domainID)`. Contains domain offers (primary entries) and hybrid offers (primary entries). Only domain members can create offers in domain order books.
 
-- **Hybrid Offers**: Bridge both order books by maintaining a primary entry in the domain book and a secondary entry (via AdditionalBooks) in the open book. When a hybrid offer is created, it only crosses with offers in the domain book.
+- **Hybrid Offers**: Bridge both order books by maintaining a primary entry in the domain book and a secondary entry (via `AdditionalBooks`) in the open book. See [Hybrid Offers](#152-hybrid-offers) for crossing and consumption semantics.
 
 ## 2.1. Offer Ledger Entry
 
@@ -295,19 +310,14 @@ in [Offer Fields](https://xrpl.org/docs/references/protocol/ledger-data/ledger-e
 
 #### 2.1.2.1. Asset-Specific Fields
 
-Offers can involve three types of assets, each using different fields for identification:
+The `Offer` entry identifies its assets entirely through the `TakerPays` and `TakerGets` Amount fields, each of which embeds the asset:
+- **XRP**: an integer amount of drops
+- **IOU**: an amount carrying a currency code and issuer
+- **MPT**: an amount carrying a 192-bit MPTID
 
-**IOU Assets**:
-- `TakerPaysCurrency`, `TakerPaysIssuer` (when `TakerPays` is a IOU)
-- `TakerGetsCurrency`, `TakerGetsIssuer` (when `TakerGets` is a IOU)
+The Offer entry itself does not store separate `TakerPaysCurrency`/`TakerPaysIssuer`/`TakerPaysMPT` (or the `TakerGets` equivalents) fields.[^offer-asset-amounts] Those broken-out asset identifiers live on the book directory root page, not the offer (see [DirectoryNode Fields](#223-fields)). All combinations of distinct XRP, IOU, and MPT assets are supported; an offer cannot pay and receive the same asset.
 
-**MPT Assets**:
-- `TakerPaysMPT` (UInt192 MPTID when `TakerPays` is an MPT)
-- `TakerGetsMPT` (UInt192 MPTID when `TakerGets` is an MPT)
-
-**XRP**: Uses `TakerPays`/`TakerGets` Amount fields directly.
-
-An offer stores only the fields relevant to its asset types. All combinations of XRP, IOUs, and MPTs are supported.
+[^offer-asset-amounts]: [`ledger_entries.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L227-L240)
 
 #### 2.1.2.2. Domain-Specific Fields
 
@@ -318,6 +328,10 @@ An offer stores only the fields relevant to its asset types. All combinations of
 - `BookNode` (UInt64): Page index within that directory
 
 This field allows hybrid offers to be discovered and consumed by both domain and open order book traversals.
+
+Under the `fixCleanup3_2_0` amendment, when a hybrid offer partially crosses on placement, the open-book `BookDirectory` referenced here is keyed by the offer's original placement rate, so it shares the same quality (`sfExchangeRate`) as the primary domain `BookDirectory`. Before the amendment the open-book directory was keyed from the post-crossing amounts and could differ slightly due to rounding.[^hybrid-open-book-rate]
+
+[^hybrid-open-book-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
 
 #### 2.1.2.3. Flags
 
@@ -337,7 +351,7 @@ The offer is stored in the ledger and tracked in an Owner Directory owned by the
 The `Offer` object costs one owner reserve for the account creating it.
 
 If the account has insufficient reserve before placing the offer:
-- If the offer crosses with existing offers (meaning some liquidity was consumed), the transaction succeeds even with insufficient reserve
+- If the offer crosses with existing offers (meaning some liquidity was consumed), the transaction succeeds even with insufficient reserve, but the unfilled remainder is not placed on the order book[^offer-reserve]
 - If the offer does not cross (nothing was consumed), the transaction fails with `tecINSUF_RESERVE_OFFER`
 
 This special behavior allows offers to succeed if they provide immediate value through crossing, even when the account cannot afford to place a standing offer on the order book.
@@ -380,8 +394,8 @@ The key is the result of [SHA512-Half](https://xrpl.org/docs/references/protocol
 
 Each directory can span multiple pages to accommodate large numbers of entries:
 
-- **Maximum entries per page**: 32 offers
-- **Maximum pages per directory**: 262,144 pages
+- **Maximum entries per page**: 32 entries
+- **Maximum pages per directory**: 262,144 pages, unless the `fixDirectoryLimit` amendment is enabled (which removes this cap)[^dir-page-limit]
 
 Pages form a doubly-linked list structure:
 - Root page (page 0) serves as the entry point
@@ -389,17 +403,21 @@ Pages form a doubly-linked list structure:
 - `sfIndexPrevious`: Points to the previous page
 - Last page's `sfIndexNext` points to root page (value 0)
 - Root's `sfIndexPrevious` points to the last page number
-- Subsequent pages have non-sequential IDs (see [2.2.1](#221-object-identifier)) and are linked to the root via `sfRootIndex` and to adjacent pages via `sfIndexNext`/`sfIndexPrevious`
+- Subsequent pages have non-sequential keys (each page key is a hash, see [2.2.1](#221-object-identifier)), but they are addressed by a sequential page number (1, 2, 3, ...). `sfIndexNext`/`sfIndexPrevious` store page numbers, and `sfRootIndex` links each page back to the root.[^page-keylet]
 
 **Page Creation**:
-- New offers are appended to the last page of the appropriate directory
+- New offers are appended to the last page of the book directory (book directories preserve insertion order). Owner directories instead insert entries in sorted order, not appended.[^dir-append-insert]
 - When a page reaches 32 entries, a new page is created and linked to the chain
-- If creating a new page would exceed 262,144 pages, the transaction fails with `tecDIR_FULL`
+- If creating a new page would exceed the page limit, the transaction fails with `tecDIR_FULL`. Before `fixDirectoryLimit` this limit is 262,144 pages; with `fixDirectoryLimit` enabled the cap is removed (pages are bounded only by the 64-bit page counter)
 
 **Page Deletion**:
 - When the last entry is removed from a non-root page, the page is deleted
 - Empty intermediate pages cause the chain to be repaired by updating adjacent pages' links
 - The root page is only deleted when the entire directory becomes empty and `keepRoot` is false
+
+[^dir-page-limit]: [`ApplyView.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/ApplyView.cpp#L124-L129)
+[^page-keylet]: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L362-L369)
+[^dir-append-insert]: [`ApplyView.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/ApplyView.h#L301-L354)
 
 ### 2.2.3. Fields
 
@@ -410,11 +428,11 @@ Pages form a doubly-linked list structure:
 - `sfIndexPrevious`: Optional, points to previous page number (omitted on root if it's the only page)
 
 **Book Directory Fields** (order books):
-- `sfTakerPaysCurrency`: Currency code for takerPays (when asset is a IOU)
-- `sfTakerPaysIssuer`: Issuer account ID for takerPays (when asset is a IOU)
+- `sfTakerPaysCurrency`: Currency code for takerPays (when asset is an IOU)
+- `sfTakerPaysIssuer`: Issuer account ID for takerPays (when asset is an IOU)
 - `sfTakerPaysMPT`: MPTID for takerPays (UInt192, when asset is an MPT)
-- `sfTakerGetsCurrency`: Currency code for takerGets (when asset is a IOU)
-- `sfTakerGetsIssuer`: Issuer account ID for takerGets (when asset is a IOU)
+- `sfTakerGetsCurrency`: Currency code for takerGets (when asset is an IOU)
+- `sfTakerGetsIssuer`: Issuer account ID for takerGets (when asset is an IOU)
 - `sfTakerGetsMPT`: MPTID for takerGets (UInt192, when asset is an MPT)
 - `sfExchangeRate`: The quality level encoded as 64-bit integer
 - `sfDomainID`: Optional, for permissioned domain offers
@@ -454,7 +472,7 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
     - transaction contains field `DomainID` but [PermissionedDex](https://xrpl.org/resources/known-amendments#permissioneddex) amendment is not enabled
     - either `takerPays` or `takerGets` is an MPT but [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled
 - `temINVALID_FLAG`:
-    - one of the specified flags is not one of [flags](#2121-flags).
+    - one of the specified flags is not one of [flags](#2123-flags).
     - flag `tfHybrid` is specified,
       but [PermissionedDex](https://xrpl.org/resources/known-amendments#permissioneddex) amendment is not enabled or
       field `DomainID` is not present in the transaction.
@@ -473,12 +491,10 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 **Validation against the ledger view:**
 
 - `terNO_ACCOUNT`: signing account does not exist
-- `tecFROZEN`: either `takerPays` or `takerGets` involves an account with `lsfGlobalFreeze` flag, fail with `tecFROZEN`. An offer cannot be created for a frozen issuer.
+- `tecFROZEN`: either `takerPays` or `takerGets` is an IOU whose issuer has the `lsfGlobalFreeze` flag set. An offer cannot be created for a frozen issuer. For an MPT whose issuance is globally locked, the same check returns `tecLOCKED` instead.[^global-frozen]
 - `tecUNFUNDED_OFFER`: signing account does not have a positive balance in `takerGets` currency and it is not the issuer of `takerGets` currency. Partially funding an offer is acceptable. For MPTs, unauthorized accounts (without `lsfMPTAuthorized` flag or without valid domain credentials when MPTokenIssuance has DomainID) are treated as having zero balance.
-- `temBAD_SEQUENCE`: `OfferSequence` is bigger than the sequence number of the next valid transaction for the signing account.
-- Transaction's `Expiration` field is before the close time of previously closed ledger:
-    - `tecEXPIRED`: [DepositAuth](https://xrpl.org/resources/known-amendments#depositauth) is enabled.
-    - `tesSUCCESS`: [DepositAuth](https://xrpl.org/resources/known-amendments#depositauth) is not enabled.
+- `temBAD_SEQUENCE`: `OfferSequence` is equal to or greater than the signing account's next sequence number (you can only cancel an offer with a lower sequence).[^offer-bad-seq]
+- `tecEXPIRED`: the `Expiration` field is before the close time of the previously closed ledger. This is unconditional (no longer gated on the DepositAuth amendment).[^offer-expired]
 - **IOU-specific validations for `takerPays`** (only applies when `takerPays` is an IOU):
   - `takerPays` issuer account does not exist:
       - `terNO_ACCOUNT`: `tapRETRY` enabled
@@ -503,16 +519,20 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 
 **MPT-specific validations**: When either `takerPays` or `takerGets` is an MPT, the transaction is validated using [`canTrade`](../mpts/README.md#361-cantrade). See [MPT Validation Functions](../mpts/README.md#36-mpt-validation-functions) for complete details on validation logic and error conditions.
 
-[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
-[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
+[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
+[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
 [^domainid-zero]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L99-L101)
 [^domain-cancel-regular]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L41-L43), [finalize](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L105-L111)
+[^offer-expired]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L222-L228), [doApply](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L651-L657)
+[^offer-bad-seq]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L215-L221)
+[^offercancel-bad-seq]: [`OfferCancel.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCancel.cpp#L34-L46)
+[^fok-killed]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L807-L812), [`features.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/features.macro#L100)
+[^ioc-killed]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L815-L825), [`features.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/features.macro#L132)
+[^global-frozen]: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L59-L65)
 
 **Validation during doApply:**
 
-- Transaction's `Expiration` field is before the close time of previously closed ledger:
-    - `tecEXPIRED`: [DepositAuth](https://xrpl.org/resources/known-amendments#depositauth) is enabled.
-    - `tesSUCCESS`: [DepositAuth](https://xrpl.org/resources/known-amendments#depositauth) is not enabled (fails and returns).
+- `tecEXPIRED`: the `Expiration` field is before the close time of the previously closed ledger (re-checked during doApply in case the offer expired after preclaim).
 
 #### 3.1.1.2. State Changes
 
@@ -522,34 +542,28 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 
 
 - `Offer` object is **not created**:
-    - If offer is not fully crossed and it was submitted with `tfFillOrKill` flag, fail and:
-        - If [fix1578](https://xrpl.org/resources/known-amendments#fix1578) is enabled, return `tecKILLED`.
-        - If [fix1578](https://xrpl.org/resources/known-amendments#fix1578) is not enabled, return `tesSUCCESS`.
-    - If offer is not at all crossed and it was submitted with `tfImmediateOrCancel` flag, fail and:
-        - If [ImmediateOfferKilled](https://xrpl.org/resources/known-amendments#immediateofferkilled) is enabled, return
-          `tecKILLED`.
-        - If [ImmediateOfferKilled](https://xrpl.org/resources/known-amendments#immediateofferkilled) is not enabled,
-          return `tesSUCCESS`.
+    - If offer is not fully crossed and it was submitted with `tfFillOrKill` flag, fail with `tecKILLED`. (`fix1578` is a retired amendment, so this is unconditional.)[^fok-killed]
+    - If offer is not at all crossed and it was submitted with `tfImmediateOrCancel` flag, fail with `tecKILLED`. (`ImmediateOfferKilled` is a retired amendment, so this is unconditional.)[^ioc-killed]
     - If offer is not fully crossed and the signing account cannot cover the reserve of creating an Offer, fail with
       `tecINSUF_RESERVE_OFFER`.
     - If offer cannot be added to the OfferDirectory because it is full, fail with `tecDIR_FULL`.
-    - If the offer is partially filled at crossing, and the signing account's balance is down to 0 after partial filling.
+    - If the offer is partially filled at crossing and the signing account's `takerGets` balance is reduced to 0, the remaining offer is not created (the transaction still succeeds).[^no-balance-no-offer]
 
 
 - `Offer` object is **created**:
-    - If `Offer` is not fully crossed. 
+    - When the offer is not fully crossed and none of the not-created conditions above apply, the `Offer` is created with the remaining `takerGets` and `takerPays`.
 
 
 - `DirectoryNode` object is **created or modified**:
     - When an offer is created, it is added to two directories:
       - **Owner Directory**: Added via `dirInsert` to `keylet::ownerDir(account)`. The page number is stored in the offer's `sfOwnerNode` field.
       - **Book Directory**: Added via `dirAppend` to the book directory for the trading pair and quality level. The directory key is stored in `sfBookDirectory`, and the page number is stored in `sfBookNode`.
-    - If the book directory root page does not exist, it is created with these fields:
+    - Each newly created book-directory page (the root page or a subsequent page) is given these fields:
       - **For IOU assets**: `sfTakerPaysCurrency` and `sfTakerPaysIssuer` (when `takerPays` is an IOU), `sfTakerGetsCurrency` and `sfTakerGetsIssuer` (when `takerGets` is an IOU)
       - **For MPT assets**: `sfTakerPaysMPT` (when `takerPays` is an MPT), `sfTakerGetsMPT` (when `takerGets` is an MPT)
       - **Always**: `sfExchangeRate` (the rate value before any crossing), and optionally `sfDomainID`
     - If a directory page is full (32 entries), a new page is created and linked to the directory chain
-    - If creating a new page would exceed 262,144 pages, the transaction fails with `tecDIR_FULL`
+    - If creating a new page would exceed the page limit, the transaction fails with `tecDIR_FULL` (the 262,144-page cap applies only before the `fixDirectoryLimit` amendment)[^dir-page-limit]
 
 
 - Order books are **registered** in `OrderBookDB` (if not already present):
@@ -575,7 +589,7 @@ in [OfferCancel Fields](https://xrpl.org/docs/references/protocol/transactions/t
 **Validation against the ledger view:**
 
 - `terNO_ACCOUNT`: signing account does not exist
-- `temBAD_SEQUENCE`: `OfferSequence` is bigger than the sequence number of the next valid transaction for the signing account
+- `temBAD_SEQUENCE`: `OfferSequence` is equal to or greater than the signing account's next sequence number[^offercancel-bad-seq]
 
 #### 3.1.2.2. State Changes
 
