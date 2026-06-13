@@ -15,9 +15,9 @@
         - [3.1.1. TrustSet Transaction](#311-trustset-transaction)
             - [3.1.1.1. Failure Conditions](#3111-failure-conditions)
             - [3.1.1.2. State Changes](#3112-state-changes)
-        - [3.2.1. Clawback Transaction](#321-clawback-transaction)
-            - [3.2.1.1. Failure Conditions](#3211-failure-conditions)
-            - [3.2.1.2. State Changes](#3212-state-changes)
+        - [3.1.2. Clawback Transaction](#312-clawback-transaction)
+            - [3.1.2.1. Failure Conditions](#3121-failure-conditions)
+            - [3.1.2.2. State Changes](#3122-state-changes)
 
 # 1. Introduction
 
@@ -42,7 +42,7 @@ Payments on the XRP Ledger often need to flow through intermediate accounts to r
 
 The NoRipple flag (`lsfLowNoRipple` / `lsfHighNoRipple`) is a per-account, per-trust-line flag that controls whether a trust line can be used for rippling. A payment is blocked from rippling through an account only when that account has NoRipple set on **both** the trust line the payment enters on and the trust line it exits on. If the account has NoRipple cleared on at least one of the two trust lines, the payment can flow through.
 
-An issuer who sets `DefaultRipple` (`lsfDefaultRipple`) on their account will have NoRipple cleared on their side of every new trust line. Since the issuer's side is always clear, the both-sides condition can never be met, and payments can always ripple through the issuer. A regular holder who does not set `DefaultRipple` will have NoRipple set on their side of every new trust line. If the holder has two trust lines for the same currency (e.g., USD.IssuerA and USD.IssuerB), both will have NoRipple set on the holder's side, so the both-sides condition is met and payments cannot ripple through the holder's account. This protects the holder from having their balance used as a pass-through without their consent.
+On a newly created trust line, each side's NoRipple flag is initialized independently. The account that submits the `TrustSet` controls its **own** side: NoRipple is set there only if that transaction includes `tfSetNoRipple`. The **counterparty's** side is set automatically when the counterparty's account does not have `lsfDefaultRipple` (the account-level flag set via AccountSet's `asfDefaultRipple`). Because issuers set `DefaultRipple`, a holder opening a trust line to an issuer leaves the issuer's side clear, so the both-sides condition is never met and payments can always ripple through the issuer. A regular holder, by contrast, is not protected automatically: to stop payments from rippling through their own account (for example across USD.IssuerA and USD.IssuerB), the holder must set `tfSetNoRipple` on each line so that both sides carry NoRipple.
 
 NoRipple is checked during both [path finding](../path_finding/README.md) and [payment execution](../flow/steps.md#215-check-implementation). Path finding uses NoRipple as a heuristic filter to avoid exploring paths that would be rejected. The flow engine enforces it as a hard constraint, failing the strand with `terNO_RIPPLE` when violated. See [trust line creation](#3112-state-changes) for how NoRipple flags are initialized.
 
@@ -133,7 +133,7 @@ see [RippleState Flags](https://xrpl.org/docs/references/protocol/ledger-data/le
 Trust lines can be created or modified with certain pseudo-accounts as the destination:
 
 - **AMM accounts** (has `sfAMMID`): Can create new trust lines for the AMM's LP token, or modify existing trust lines
-- **Vault accounts** (has `sfVaultID`): Can only modify existing trust lines, cannot create new ones
+- **Vault accounts** (has `sfVaultID`) and **LoanBroker accounts** (has `sfLoanBrokerID`): Can only modify existing trust lines; attempting to create a new one fails with `tecNO_PERMISSION`
 - **Other pseudo-accounts**: Cannot create or modify trust lines (fails with `tecPSEUDO_ACCOUNT`)
 
 The TrustSet transaction never creates, deletes, or modifies the pseudo-account itself - it only creates or modifies
@@ -152,7 +152,7 @@ The `sfLowNode` and `sfHighNode` fields in the `RippleState` entry store the dir
 
 ### 2.1.5. Reserves
 
- An account only pays a reserve for a trust line when the account owns more than two items total. 
+Every non-default trust line increments the account's `OwnerCount`, which raises its reserve requirement. The `TrustSet` transaction enforces that incremental reserve only when the account already owns two or more objects; while it owns fewer than two, a new trust line is allowed even if the account's balance would not cover the extra reserve (this lets a gateway fund new users cheaply).
 
 An account's side of a trust line requires a reserve when any of the following are in a non-default state:
 
@@ -205,7 +205,7 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 
 - `temINVALID_FLAG`: one of the specified flags is not one of [flags](#2121-flags).
 - `temINVALID_FLAG`: flags contain `tfSetDeepFreeze` or `tfClearDeepFreeze` and [DeepFreeze amendment](https://xrpl.org/resources/known-amendments#deepfreeze) is not enabled.
-- `temBAD_AMOUNT`: `LimitAmount` is XRP and mantissa is bigger than `100000000000000000ull`.
+- `temBAD_AMOUNT`: `LimitAmount` is XRP and mantissa is bigger than `100000000000000000ull`. This is a defensive `isLegalNet` check; in practice an XRP `LimitAmount` fails with `temBAD_LIMIT` (below).
 - `temBAD_LIMIT`: `LimitAmount` is XRP.
 - `temBAD_CURRENCY`: `currency` field in `LimitAmount` is `XRP`.
 - `temBAD_LIMIT`: `value` field in `LimitAmount` is less than `0`.
@@ -215,16 +215,16 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 
 - `terNO_ACCOUNT`: source account does not exist.
 - `tefNO_AUTH_REQUIRED`: source account does not have a `lsfRequireAuth` flag set, but the transaction contains `tfSetfAuth` flag.
-- `temDST_IS_SRC`: [fixTrustLinesToSelf](https://xrpl.org/resources/known-amendments#fixtrustlinestoself) amendment is enabled, or if the trust line does not already exist and the source account and destination account are the same.
-- `tecNO_DST`: one of [DisallowIncoming](https://xrpl.org/resources/known-amendments#disallowincoming), [AMM](https://xrpl.org/resources/known-amendments#amm) or [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault) amendments are enabled and the issuer account does not exist. 
-- `tecNO_PERMISSION`: [DisallowIncoming](https://xrpl.org/resources/known-amendments#disallowincoming) is enabled and the destination account has `lsfDisallowIncomingTrustline` flag:
+- `temDST_IS_SRC`: the source account and the destination account (`LimitAmount.issuer`) are the same.
+- `tecNO_DST`: the [AMM](https://xrpl.org/resources/known-amendments#amm) or [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault) amendment is enabled and the destination (issuer) account does not exist.
+- `tecNO_PERMISSION`: the destination account has the `lsfDisallowIncomingTrustline` flag set:
     - If the trust line was already created for a destination with `lsfDisallowIncomingTrustline` and amendment [fixDisallowIncomingV1](https://xrpl.org/resources/known-amendments#fixdisallowincomingv1) was enabled, do not fail.
 - If the destination account is a pseudo-account:
     - `sfAMMID`: destination is an AMM account (has `sfAMMID` field), but the trust line does not already exist between source and AMM.
             - `tecAMM_EMPTY`: AMM has zero LP IOUs - cannot create trust lines to empty AMMs.
             - `tecNO_PERMISSION`: currency in the trust line request does not match the AMM's LP token currency.
             - `tecINTERNAL`: AMM ledger entry cannot be found.
-    - `tecNO_PERMISSION`: destination is a Vault account (has `sfVaultID` field) and the trust line does not already exist.
+    - `tecNO_PERMISSION`: destination is a Vault account (has `sfVaultID` field) or LoanBroker account (has `sfLoanBrokerID` field) and the trust line does not already exist.
     - `tecPSEUDO_ACCOUNT`: destination is any other type of pseudo-account.
 - If [DeepFreeze](https://xrpl.org/resources/known-amendments#deepfreeze) amendment is enabled, validate freeze flag combinations:
     - `tecNO_PERMISSION`: source account has `lsfNoFreeze` flag set and the transaction contains `tfSetFreeze` or `tfSetDeepFreeze`
@@ -247,9 +247,8 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 #### 3.1.1.2. State Changes
 
 - `RippleState` object is **deleted** if an existing trust line exists when sending `TrustSet` transaction and:
-    - If [fixTrustLinesToSelf](https://xrpl.org/resources/known-amendments#fixtrustlinestoself) is **not** enabled and source and destination accounts are the same (legacy cleanup for two historical self-referential trust lines).
     - If the trust line is in its [default state](#11-default-state) after updating it.
-    - If the currency code of the IOU is `XRP`.
+    - If the currency code of the IOU is `XRP`. This is a defensive check; a `TrustSet` with an `XRP` currency is already rejected at preflight (`temBAD_CURRENCY`/`temBAD_LIMIT`), so this deletion branch is not reached in normal flow.
     - When deleted, the trust line is removed from both accounts' owner directories:
       - Removed from low account's owner directory via `dirRemove` using the `sfLowNode` page number.
       - Removed from high account's owner directory via `dirRemove` using the `sfHighNode` page number.
@@ -259,29 +258,25 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 
 - `RippleState` object is **modified**:
     - If `QualityIn` field was specified in the transaction:
-        - If `QualityIn` != `1,000,000,000`, set the appropriate quality field (`sfLowQualityIn` for low source account,
-          `sfHighQualityIn` for high source account) to the `QualityIn` value
-        - If `QualityIn` = `1,000,000,000`, clear the appropriate quality field (`sfLowQualityIn` for low source
-          account, `sfHighQualityIn` for high source account)
+        - If `QualityIn` is non-zero, set the appropriate quality field (`sfLowQualityIn` for low source account, `sfHighQualityIn` for high source account) to the `QualityIn` value. Unlike `QualityOut`, a `QualityIn` equal to `1,000,000,000` (QUALITY_ONE) is stored as-is, not folded to the default.
+        - If `QualityIn` is `0` (or absent), clear the appropriate quality field (`sfLowQualityIn` for low source account, `sfHighQualityIn` for high source account).
     - If `QualityOut` field was specified in the transaction:
         - If `QualityOut` != `1,000,000,000`, set the appropriate quality field (`sfLowQualityOut` for low source
           account, `sfHighQualityOut` for high source account) to the `QualityOut` value
         - If `QualityOut` = `1,000,000,000`, clear the appropriate quality field (`sfLowQualityOut` for low source
           account, `sfHighQualityOut` for high source account)
     - If the transaction contains `tfSetNoRipple` flag and not `tfClearNoRipple` flag:
-        - If the source account's balance on the trust line is non-negative, set the appropriate NoRipple flag (
-          `lsfLowNoRipple` for low account, `lsfHighNoRipple` for high account)
-        - If the transaction contains `tfClearNoRipple` flag and not `tfSetNoRipple` flag, clear the appropriate
-          NoRipple flag (`lsfLowNoRipple` for low account, `lsfHighNoRipple` for high account)
-    - If the transaction contains `tfSetfAuth` flag set `lsfLowAuth` for low source account and `lsfHighAuth` for high
-      source account.
+        - If the source account's balance on the trust line is non-negative, set the appropriate NoRipple flag (`lsfLowNoRipple` for low account, `lsfHighNoRipple` for high account)
+        - If the source account's balance is negative, the transaction fails with `tecNO_PERMISSION`
+    - If the transaction contains `tfClearNoRipple` flag and not `tfSetNoRipple` flag, clear the appropriate NoRipple flag (`lsfLowNoRipple` for low account, `lsfHighNoRipple` for high account)
+    - If the transaction contains `tfSetfAuth` flag, set the appropriate authorization flag for the source account's side only (`lsfLowAuth` if the source is the low account, `lsfHighAuth` if it is the high account).
     - Note: if, after applying the above modifications, the trust line is in its [default state](#11-default-state), it is deleted rather than kept as modified (see deletion conditions above)[^modify-then-delete].
     - If account's parameters in a trust line change to non-default values such that it requires reserve but did not
       before:
         - Set appropriate `lsfLowReserve` or `lsfHighReserve` flag
     - If account no longer requires reserve because its values in a trust line are now default values:
         - Clear appropriate `lsfLowReserve` or `lsfHighReserve` flag
-    - If flags are provided, they will modify the currently stored flags value.
+    - Only the NoRipple, freeze, authorization, and reserve flag bits are individually set or cleared (as described above); all other stored flag bits are preserved, and `sfFlags` is rewritten only if it changed.
 
 
 - `RippleState` object is **created**:
@@ -294,16 +289,16 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
       - The source account's NoRipple flag (`lsfLowNoRipple` or `lsfHighNoRipple`) is set if the TrustSet transaction contains `tfSetNoRipple` and not `tfClearNoRipple`[^trustcreate-noripple-src].
       - The destination account's NoRipple flag is set if the destination account does **not** have `lsfDefaultRipple` on their account[^trustcreate-noripple-dst]. `lsfDefaultRipple` is an account-level flag set via AccountSet (`asfDefaultRipple`). When an issuer sets `lsfDefaultRipple`, new trust lines are created without NoRipple on the issuer's side, allowing rippling by default.
 
-[^modify-then-delete]: Default state check and deletion after modification: [`SetTrust.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/TrustSet.cpp#L595-L600)
-[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L281)
-[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L267)
-[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L277-L281)
+[^modify-then-delete]: Default state check and deletion after modification: [`TrustSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/TrustSet.cpp#L595-L600)
+[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L281)
+[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L267)
+[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L277-L281)
 
 
 - `DirectoryNode` object is **created or modified**:
     - When a trust line is created, it is added to both participating accounts' owner directories.
     - If an owner directory page is full (32 entries), a new page is created and linked to the directory chain.
-    - If creating a new page would exceed 262,144 pages, the transaction fails with `tecDIR_FULL`.
+    - Before the `fixDirectoryLimit` amendment, if creating a new page would exceed 262,144 pages, the transaction fails with `tecDIR_FULL`. With `fixDirectoryLimit` enabled, that cap is removed and a new page can only fail to be created on 64-bit page-number overflow.
 
 
 - `AccountRoot` object is **modified**:
@@ -312,7 +307,7 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
     - If account no longer requires reserve:
         - Decrement `sfOwnerCount` by 1, without going below `0`.
 
-### 3.2.1. Clawback Transaction
+### 3.1.2. Clawback Transaction
 
 **Design note** - in `rippled`, the same transactor implementation of `Clawback` is used to clawback
 both [IOUs](../glossary.md#iou) and [MPTs](../glossary.md#mpt). `rippled`'s `Clawback` implementation of
@@ -329,7 +324,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
 - *Holder* is the account specified, counterintuitively, as `issuer` field in `Amount`. This is a commonly used
   pattern to use `issuer` to denote a peer's account.
 
-#### 3.2.1.1. Failure Conditions
+#### 3.1.2.1. Failure Conditions
 
 Static validation
 
@@ -338,15 +333,14 @@ Static validation
   - For IOU clawback: user provided `Holder` field in the transaction (IOUs use `Amount.issuer` to specify the holder).
   - For MPT clawback: user did NOT provide `Holder` field in the transaction (MPTs require the `Holder` field).
 - `temBAD_AMOUNT`: 
-  - issuer and holder are the same account.
+  - issuer and holder are the same account (for IOU clawback; an MPT clawback with the same issuer and holder returns `temMALFORMED` instead).
   - `Amount` provided is XRP.
   - `Amount` is not bigger than `0`.
 
 Validation against the ledger view
 
 - `terNO_ACCOUNT`: issuer's or holder's account does not exist.
-- `tecAMM_ACCOUNT`: If holder's account is an AMM account, such as a SingleAssetVault or AMM account and if
-  amendment [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault) is not enabled.
+- `tecAMM_ACCOUNT`: holder's account is an AMM account (has `sfAMMID`) and the [SingleAssetVault](https://xrpl.org/resources/known-amendments#singleassetvault) amendment is not enabled.
 - `tecPSEUDO_ACCOUNT`: If `SingleAssetVault` is enabled and holder's account is any pseudo-account.
 - `tecNO_PERMISSION`: issuer does not have `lsfAllowTrustLineClawback` or it does have `lsfNoFreeze`. Only
   trust lines of issuers that can be frozen and that allow trust line clawback can be clawed back.
@@ -354,20 +348,17 @@ Validation against the ledger view
 - `tecNO_PERMISSION`: the account specified as `account` (issuer) is not actually the issuer based on the trust line
   balance. The true issuer is the account with the negative balance (owing IOUs), not the positive balance (holding
   IOUs). This error occurs when the transaction sender has the accounts reversed.
-- `tecINSUFFICIENT_FUNDS`: holder's balance is `0`.
+- `tecINSUFFICIENT_FUNDS`: the holder's available balance (computed via `accountHolds`) is `0` or negative. This is the spendable balance, which can differ from the raw trust-line balance.
 
 
-#### 3.2.1.2. State Changes
+#### 3.1.2.2. State Changes
 
 - `RippleState` object is **modified**:
     - Amount specified in `Amount` field is transferred from holder to issuer on the trust line for specified currency
       code. This is done by subtracting the amount from holder's account and adding it to issuer's account. No limits or
       fees are enforced.
         - If the `amount` is bigger than the available balance, only the available balance is moved.
-    - If account no longer requires reserve because its values in a trust line are now default values after the
-      transfer:
-        - Clear appropriate `lsfLowReserve` or `lsfHighReserve` flag
-        - Adjust owner count for the account
+    - If the clawback returns the holder's side of the trust line to its default state (the holder's balance falls from positive to zero, and its limit, qualities, NoRipple, and freeze are already at default), the holder's `lsfLowReserve` or `lsfHighReserve` flag is cleared and the holder's `OwnerCount` is decremented. Only the holder (sender) side is adjusted; the issuer's side is not.
 
 
 - `RippleState` object is **deleted**:
@@ -378,8 +369,4 @@ Validation against the ledger view
       - If removing the trust line empties a non-root directory page, that page is deleted and the directory chain is repaired.
 
 
-- `AccountRoot` object is **modified** (when `RippleState` is deleted):
-    - If `lsfLowReserve` flag was set on the deleted trust line: decrement low account's `sfOwnerCount` by 1
-    - If `lsfHighReserve` flag was set on the deleted trust line: decrement high account's `sfOwnerCount` by 1
-    - Note: Due to the "first two items are free" policy (see [Reserves](#215-reserves)), an account may not have
-      a reserve flag set even though the trust line exists, so OwnerCount may not be decremented for both accounts.
+- `AccountRoot` (`sfOwnerCount`): deleting the `RippleState` does not by itself change any account's `sfOwnerCount`. The only owner-count change a clawback makes is the single holder-side decrement noted above, applied when the holder's side returns to default (whether or not the line is then deleted). The issuer's `sfOwnerCount` is not adjusted by a clawback.

@@ -709,7 +709,7 @@ Issuer-initiated authorize/unauthorize only applies when the issuance has `lsfMP
 
 ## 3.5. Clawback Transaction with MPTs
 
-The `Clawback` transaction allows issuers to claw back MPTs from holders when the `lsfMPTCanClawback` flag is set. This is the same transaction type used for [trust line](../trust_lines/README.md#321-clawback-transaction) tokens, but with MPT-specific handling.
+The `Clawback` transaction allows issuers to claw back MPTs from holders when the `lsfMPTCanClawback` flag is set. This is the same transaction type used for [trust line](../trust_lines/README.md#312-clawback-transaction) tokens, but with MPT-specific handling.
 
 **Fields**:
 

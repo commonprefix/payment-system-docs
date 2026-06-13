@@ -1206,7 +1206,7 @@ If there are too many trust lines to delete in a single transaction (limited by 
 
 The `AMMClawback` transaction allows asset issuers to claw back their issued assets from AMM liquidity pools by withdrawing them from a specific LP token holder's position. This transaction is only available when the [AMMClawback](https://xrpl.org/resources/known-amendments#ammclawback) amendment is enabled.
 
-Unlike the regular [Clawback transaction](../trust_lines/README.md#321-clawback-transaction) which claws back trust line tokens and [MPTs](../mpts/README.md#35-clawback-transaction-with-mpts) from individual holder balances, `AMMClawback` targets assets held in AMM liquidity pools. The issuer specifies an LP token holder, and the transaction withdraws the issuer's assets from the pool proportionally to that holder's LP token position, burning the corresponding LP tokens.
+Unlike the regular [Clawback transaction](../trust_lines/README.md#312-clawback-transaction) which claws back trust line tokens and [MPTs](../mpts/README.md#35-clawback-transaction-with-mpts) from individual holder balances, `AMMClawback` targets assets held in AMM liquidity pools. The issuer specifies an LP token holder, and the transaction withdraws the issuer's assets from the pool proportionally to that holder's LP token position, burning the corresponding LP tokens.
 
 **How it works:**
 
