@@ -329,6 +329,10 @@ The Offer entry itself does not store separate `TakerPaysCurrency`/`TakerPaysIss
 
 This field allows hybrid offers to be discovered and consumed by both domain and open order book traversals.
 
+Under the `fixCleanup3_1_3` amendment, a valid hybrid offer must carry exactly one `AdditionalBooks` entry (the open order book). The `ValidPermissionedDEX` invariant rejects a hybrid offer whose `AdditionalBooks` array is missing, empty, or holds more than one entry. Before the amendment a present-but-empty array slipped through, since only a missing array or more than one entry failed the invariant.[^hybrid-additionalbooks-count]
+
+[^hybrid-additionalbooks-count]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L46-L75)
+
 Under the `fixCleanup3_2_0` amendment, when a hybrid offer partially crosses on placement, the open-book `BookDirectory` referenced here is keyed by the offer's original placement rate, so it shares the same quality (`sfExchangeRate`) as the primary domain `BookDirectory`. Before the amendment the open-book directory was keyed from the post-crossing amounts and could differ slightly due to rounding.[^hybrid-open-book-rate]
 
 [^hybrid-open-book-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)

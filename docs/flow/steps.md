@@ -84,14 +84,14 @@ The **fundamental types** of steps in `rippled`:
 
 During [path to strand conversion](README.md#52-path-to-strand-conversion), Flow examines each pair of adjacent path elements to determine what type of step connects them. The [toStep function](README.md#53-step-generation) examines element characteristics (accounts vs order books, currency types, position in strand) and calls the appropriate factory function.
 
-- `make_DirectStepI`[^make-directstepi] for account-to-account IOU transfers
-- `make_BookStepII`[^make-bookstepii], `make_BookStepIX`[^make-bookstepix], `make_BookStepXI`[^make-bookstepxi], `make_BookStepMM`[^make-bookstepmm], `make_BookStepMX`[^make-bookstepmx], `make_BookStepXM`[^make-bookstepxm], `make_BookStepMI`[^make-bookstepmi], `make_BookStepIM`[^make-bookstepim] for order book conversions
+- `makeDirectStepI`[^make-directstepi] for account-to-account IOU transfers
+- `makeBookStepIi`[^make-bookstepii], `makeBookStepIx`[^make-bookstepix], `makeBookStepXi`[^make-bookstepxi], `makeBookStepMm`[^make-bookstepmm], `makeBookStepMx`[^make-bookstepmx], `makeBookStepXm`[^make-bookstepxm], `makeBookStepMi`[^make-bookstepmi], `makeBookStepIm`[^make-bookstepim] for order book conversions
 - `make_XRPEndpointStep`[^make-xrpendpointstep] for XRP source/destination steps
 - `make_MPTEndpointStep`[^make-mptendpointstep] for MPT source/destination steps
 
 Steps handle different asset type combinations - XRP, IOU and MPT. In `rippled`, these are represented by different types (`XRPAmount`, `IOUAmount`, `MPTAmount`) with different arithmetic and precision characteristics.
 
-**BookStep** uses template parameters to handle multiple asset type combinations. The factory functions (`make_BookStepII`, `make_BookStepIX`, etc.) instantiate the same `BookStep` template with the appropriate type parameters based on the input and output asset types.
+**BookStep** uses template parameters to handle multiple asset type combinations. The factory functions (`makeBookStepIi`, `makeBookStepIx`, etc.) instantiate the same `BookStep` template with the appropriate type parameters based on the input and output asset types.
 
 Flow executes in one of two contexts, determined by the transaction type that invokes it:
 
@@ -105,24 +105,24 @@ The context affects step behavior throughout the flow process. Steps receive the
 
 | Alias                        | Concrete class (definition)    | Input       | Output      | Factory                 |
 |------------------------------|--------------------------------|-------------|-------------|-------------------------|
-| DirectStepI (payment)        | `DirectIPaymentStep`[^directipaymentstep]           | `IOUAmount`[^iouamount] | `IOUAmount` | `make_DirectStepI`[^make-directstepi]      |
-| DirectStepI (offer crossing) | `DirectIOfferCrossingStep`[^directioffercrossingstep]     | `IOUAmount` | `IOUAmount` | `make_DirectStepI`      |
-| BookStepII (payment)         | `BookPaymentStep`[^bookpaymentstep]              | `IOUAmount` | `IOUAmount` | `make_BookStepII`[^make-bookstepii]       |
-| BookStepII (offer crossing)  | `BookOfferCrossingStep`[^bookoffercrossingstep]        | `IOUAmount` | `IOUAmount` | `make_BookStepII`       |
-| BookStepIX (payment)         | `BookPaymentStep`              | `IOUAmount` | `XRPAmount`[^xrpamount] | `make_BookStepIX`[^make-bookstepix]       |
-| BookStepIX (offer crossing)  | `BookOfferCrossingStep`        | `IOUAmount` | `XRPAmount` | `make_BookStepIX`       |
-| BookStepXI (payment)         | `BookPaymentStep`              | `XRPAmount` | `IOUAmount` | `make_BookStepXI`[^make-bookstepxi]       |
-| BookStepXI (offer crossing)  | `BookOfferCrossingStep`        | `XRPAmount` | `IOUAmount` | `make_BookStepXI`       |
-| BookStepMM (payment)         | `BookPaymentStep`              | `MPTAmount`[^mptamount] | `MPTAmount` | `make_BookStepMM`[^make-bookstepmm]       |
-| BookStepMM (offer crossing)  | `BookOfferCrossingStep`        | `MPTAmount` | `MPTAmount` | `make_BookStepMM`       |
-| BookStepMX (payment)         | `BookPaymentStep`              | `MPTAmount` | `XRPAmount` | `make_BookStepMX`[^make-bookstepmx]       |
-| BookStepMX (offer crossing)  | `BookOfferCrossingStep`        | `MPTAmount` | `XRPAmount` | `make_BookStepMX`       |
-| BookStepXM (payment)         | `BookPaymentStep`              | `XRPAmount` | `MPTAmount` | `make_BookStepXM`[^make-bookstepxm]       |
-| BookStepXM (offer crossing)  | `BookOfferCrossingStep`        | `XRPAmount` | `MPTAmount` | `make_BookStepXM`       |
-| BookStepMI (payment)         | `BookPaymentStep`              | `MPTAmount` | `IOUAmount` | `make_BookStepMI`[^make-bookstepmi]       |
-| BookStepMI (offer crossing)  | `BookOfferCrossingStep`        | `MPTAmount` | `IOUAmount` | `make_BookStepMI`       |
-| BookStepIM (payment)         | `BookPaymentStep`              | `IOUAmount` | `MPTAmount` | `make_BookStepIM`[^make-bookstepim]       |
-| BookStepIM (offer crossing)  | `BookOfferCrossingStep`        | `IOUAmount` | `MPTAmount` | `make_BookStepIM`       |
+| DirectStepI (payment)        | `DirectIPaymentStep`[^directipaymentstep]           | `IOUAmount`[^iouamount] | `IOUAmount` | `makeDirectStepI`[^make-directstepi]      |
+| DirectStepI (offer crossing) | `DirectIOfferCrossingStep`[^directioffercrossingstep]     | `IOUAmount` | `IOUAmount` | `makeDirectStepI`      |
+| BookStepII (payment)         | `BookPaymentStep`[^bookpaymentstep]              | `IOUAmount` | `IOUAmount` | `makeBookStepIi`[^make-bookstepii]       |
+| BookStepII (offer crossing)  | `BookOfferCrossingStep`[^bookoffercrossingstep]        | `IOUAmount` | `IOUAmount` | `makeBookStepIi`       |
+| BookStepIX (payment)         | `BookPaymentStep`              | `IOUAmount` | `XRPAmount`[^xrpamount] | `makeBookStepIx`[^make-bookstepix]       |
+| BookStepIX (offer crossing)  | `BookOfferCrossingStep`        | `IOUAmount` | `XRPAmount` | `makeBookStepIx`       |
+| BookStepXI (payment)         | `BookPaymentStep`              | `XRPAmount` | `IOUAmount` | `makeBookStepXi`[^make-bookstepxi]       |
+| BookStepXI (offer crossing)  | `BookOfferCrossingStep`        | `XRPAmount` | `IOUAmount` | `makeBookStepXi`       |
+| BookStepMM (payment)         | `BookPaymentStep`              | `MPTAmount`[^mptamount] | `MPTAmount` | `makeBookStepMm`[^make-bookstepmm]       |
+| BookStepMM (offer crossing)  | `BookOfferCrossingStep`        | `MPTAmount` | `MPTAmount` | `makeBookStepMm`       |
+| BookStepMX (payment)         | `BookPaymentStep`              | `MPTAmount` | `XRPAmount` | `makeBookStepMx`[^make-bookstepmx]       |
+| BookStepMX (offer crossing)  | `BookOfferCrossingStep`        | `MPTAmount` | `XRPAmount` | `makeBookStepMx`       |
+| BookStepXM (payment)         | `BookPaymentStep`              | `XRPAmount` | `MPTAmount` | `makeBookStepXm`[^make-bookstepxm]       |
+| BookStepXM (offer crossing)  | `BookOfferCrossingStep`        | `XRPAmount` | `MPTAmount` | `makeBookStepXm`       |
+| BookStepMI (payment)         | `BookPaymentStep`              | `MPTAmount` | `IOUAmount` | `makeBookStepMi`[^make-bookstepmi]       |
+| BookStepMI (offer crossing)  | `BookOfferCrossingStep`        | `MPTAmount` | `IOUAmount` | `makeBookStepMi`       |
+| BookStepIM (payment)         | `BookPaymentStep`              | `IOUAmount` | `MPTAmount` | `makeBookStepIm`[^make-bookstepim]       |
+| BookStepIM (offer crossing)  | `BookOfferCrossingStep`        | `IOUAmount` | `MPTAmount` | `makeBookStepIm`       |
 | XRPEndpoint (payment)        | `XRPEndpointPaymentStep`[^xrpendpointpaymentstep]       | `XRPAmount` | `XRPAmount` | `make_XRPEndpointStep`[^make-xrpendpointstep]  |
 | XRPEndpoint (offer crossing) | `XRPEndpointOfferCrossingStep`[^xrpendpointoffercrossingstep] | `XRPAmount` | `XRPAmount` | `make_XRPEndpointStep`  |
 | MPTEndpoint (payment)        | `MPTEndpointPaymentStep`[^mptendpointpaymentstep]       | `MPTAmount` | `MPTAmount` | `make_MPTEndpointStep`[^make-mptendpointstep]  |
@@ -137,8 +137,8 @@ The context affects step behavior throughout the flow process. Steps receive the
 [^mptendpointpaymentstep]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L242-L281)
 [^mptendpointoffercrossingstep]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L284-L326)
 [^iouamount]: [`IOUAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/IOUAmount.h#L24-L91)
-[^xrpamount]: [`XRPAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/XRPAmount.h#L19-L287)
-[^mptamount]: [`MPTAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/MPTAmount.h#L16-L166)
+[^xrpamount]: [`XRPAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/XRPAmount.h#L19-L237)
+[^mptamount]: [`MPTAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/MPTAmount.h#L16-L83)
 [^make-directstepi]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L922-L947)
 [^make-bookstepii]: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L1521-L1525)
 [^make-bookstepix]: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L1527-L1531)
@@ -222,7 +222,7 @@ Given a requested output amount, this function[^directstepi-revimp]:
 2. Calculates quality adjustments from both source and destination accounts via [`qualities`](#213-quality-functions) which calls [`quality`](#221-quality-implementation) (payment - respects QualityIn/QualityOut in certain conditions) or [`quality`](#231-quality-implementation) (offer crossing - always returns QUALITY_ONE)
 3. Computes how much must flow on the trust line to produce the desired output, accounting for destination quality
 4. Calculates the required input amount, accounting for source quality and transfer fees
-5. Makes the payment by calling `rippleCredit` to update the trust line in the sandbox
+5. Makes the payment by calling `directSendNoFee` to update the trust line in the sandbox
 6. Returns the actual input required and output delivered
 
 #### 2.1.1.1. `revImp` Pseudo-Code
@@ -238,7 +238,7 @@ def revImp(sb, out: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
     # dstQIn stands for Destination Quality In
     #   - the quality the destination applies for receiving funds
     # Each quality can be a discount or a premium.
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::reverse)
+    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Reverse)
 
     # Set the IOU to currency and correct issuer pair
     srcToDstIss.currency = currency_
@@ -259,7 +259,7 @@ def revImp(sb, out: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
         in = roundUp(srcToDst * srcQOut / QUALITY_ONE)
         cache_ = { in: in, srcToDst: srcToDst, out: out, srcDebtDir}
         # Update the trustline with appropriate srcToDst amount
-        rippleCredit(sb, src_, dst_, srcToDstIss(srcToDst))
+        directSendNoFee(sb, src_, dst_, srcToDstIss(srcToDst))
         return { in: in, out: out}
 
     # We don't have enough liquidity, so we will require as much input as will produce maximum output we can have
@@ -267,7 +267,7 @@ def revImp(sb, out: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
     actualOut = roundDown(maxSrcToDst * dstQIn / QUALITY_ONE)
     cache_ = { in: in, srcToDst: maxSrcToDst, out: actualOut, srcDebtDir}
     # Update the trustline with the amount limited to liquidity of this step
-    rippleCredit(sb, src_, dst_, srcToDstIss(maxSrcToDst))
+    directSendNoFee(sb, src_, dst_, srcToDstIss(maxSrcToDst))
     return { in: in, out: actualOut}
 ```
 
@@ -289,7 +289,7 @@ def fwdImp(sb, in: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
     # Recalculate liquidity based on cached srcToDst from reverse pass
     maxSrcToDst, srcDebtDir = maxFlow(sb, cache_.srcToDst)
 
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::forward)
+    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Forward)
     srcToDstIss.currency = currency_
     srcToDstIss.account = dst_ if srcDebtDir == 'redeems' else src_
 
@@ -308,14 +308,14 @@ def fwdImp(sb, in: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
         # changed from rev to fwd passes.
         setCacheLimiting(in, srcToDst, out, srcDebtDir)
         # Make the payment using the cached srcToDst value
-        rippleCredit(sb, src_, dst_, srcToDstIss(cache_.srcToDst))
+        directSendNoFee(sb, src_, dst_, srcToDstIss(cache_.srcToDst))
     else:
         # We don't have full liquidity
         actualIn = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
         out = roundDown(maxSrcToDst * dstQIn / QUALITY_ONE)
         setCacheLimiting(actualIn, maxSrcToDst, out, srcDebtDir)
         # Make the payment using the cached srcToDst value
-        rippleCredit(sb, src_, dst_, srcToDstIss(cache_.srcToDst))
+        directSendNoFee(sb, src_, dst_, srcToDstIss(cache_.srcToDst))
 
     # This ensures that the forward pass never returns better rates than reverse pass promised
     return { in: cache_.in, out: cache_.out}
@@ -334,8 +334,8 @@ It returns two quality values:
 These qualities are used to calculate how input amounts transform to output amounts accounting for transfer fees and quality adjustments.
 
 The `strandDir` (strand direction) parameter controls whether the previous step's debt direction is fetched from cache or calculated fresh:
-- `StrandDirection::reverse` (reverse pass): Calculate previous step's debt direction from current ledger state
-- `StrandDirection::forward` (forward pass): Use cached debt direction from the reverse pass
+- `StrandDirection::Reverse` (reverse pass): Calculate previous step's debt direction from current ledger state
+- `StrandDirection::Forward` (forward pass): Use cached debt direction from the reverse pass
 
 The `qualities` function delegates to two specialized helpers based on the current step's debt direction:
 
@@ -381,7 +381,7 @@ def qualitiesSrcRedeems(sb) -> (srcQOut, dstQIn):
         return {QUALITY_ONE, QUALITY_ONE}
 
     prevStepQIn = prevStep_.lineQualityIn(sb)
-    srcQOut = quality(sb, QualityDirection::out)
+    srcQOut = quality(sb, QualityDirection::Out)
 
     # Use the worse of the two qualities (higher value = worse for sender)
     if prevStepQIn > srcQOut:
@@ -396,7 +396,7 @@ def qualitiesSrcIssues(sb, prevStepDebtDirection) -> (srcQOut, dstQIn):
     else:
         srcQOut = QUALITY_ONE
 
-    dstQIn = quality(sb, QualityDirection::in)
+    dstQIn = quality(sb, QualityDirection::In)
 
     # If this is the last step, cap destination quality at QUALITY_ONE
     if isLast_ and dstQIn > QUALITY_ONE:
@@ -420,7 +420,7 @@ The implementation is the same for both `DirectIPaymentStep` and `DirectIOfferCr
 ```python
 def qualityUpperBound(v: ReadView, prevStepDir: DebtDirection) -> (q: Quality, dir: DebtDirection):
     # Determine debt direction for this step
-    dir = debtDirection(v, StrandDirection::forward)
+    dir = debtDirection(v, StrandDirection::Forward)
 
     # Calculate qualities based on whether source is redeeming or issuing
     if dir == "redeems":
@@ -452,12 +452,12 @@ The base class `DirectStepI` provides[^directstepi-check] common validation that
 - `tecINTERNAL`[^check-tecinternal]: AMM account exists but AMM ledger entry does not exist (should not happen)
 - `terNO_LINE`[^check-no-ripple-line]: The previous step is also a DirectStep (two consecutive DirectSteps). `checkNoRipple` reads the two trust lines that connect to the intermediate account (the source of the current step): one from the source of the previous step and one to the destination of the current step. This check fails if either trust line does not exist.
 - `terNO_RIPPLE`[^check-no-ripple]: The previous step is also a DirectStep and the intermediate account has NoRipple set on **both** trust lines. If either trust line has NoRipple cleared on the intermediate account's side, rippling is allowed and this check passes.
-- `temBAD_PATH_LOOP`[^check-bad-path-loop-book][^check-bad-path-loop-seen]: Path loop detected (same issue appears multiple times in invalid pattern)
+- `temBAD_PATH_LOOP`[^check-bad-path-loop-book][^check-bad-path-loop-seen]: Path loop detected (the asset already appears in the `seenDirectAssets` loop-detection set for this direction)
 
 [^check-bad-path-null]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L829)
 [^check-bad-path-same]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L835)
 [^check-no-account]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L842)
-[^check-freeze]: [`StepChecks.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StepChecks.h#L26) (also lines 35, 41, 57) - called from [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L848)
+[^check-freeze]: [`StepChecks.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StepChecks.h#L26) (also lines 34, 40, 55) - called from [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L848)
 [^check-tecinternal]: [`StepChecks.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StepChecks.h#L51) - called from [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L848)
 [^check-no-ripple-line]: [`StepChecks.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StepChecks.h#L78) - called from [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L859)
 [^check-no-ripple]: [`StepChecks.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StepChecks.h#L86) - called from [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L859)
@@ -485,7 +485,7 @@ def quality(sb, qDir: QualityDirection) -> int:
         return QUALITY_ONE
 
     # Determine which quality field to read based on direction and account ordering
-    if qDir == QualityDirection::in:
+    if qDir == QualityDirection::In:
         # Destination quality in
         field = sfLowQualityIn if dst_ < src_ else sfHighQualityIn
     else:
@@ -521,7 +521,7 @@ In DirectIPaymentStep, `maxFlow` returns:
 # The out parameter is unused
 def maxFlow(sb, out) -> (maxSrcToDst, srcDebtDir):
     # Get the balance of src_ on the trustline
-    srcOwed = accountHolds(sb, src_, currency_, dst_, fhIGNORE_FREEZE)
+    srcOwed = accountHolds(sb, src_, currency_, dst_, FreezeHandling::IgnoreFreeze)
 
     if srcOwed > 0:
         # Holder is sending to issuer, they can only send as much as was issued to them
@@ -595,7 +595,7 @@ def revImp(sb, afView, ofrsToRm, out: XRPAmount) -> (in: XRPAmount, out: XRPAmou
     sender = xrpAccount() if isLast_ else acc_
     receiver = acc_ if isLast_ else xrpAccount()
 
-    ter = accountSend(sb, sender, receiver, result)
+    ter = accountSend(sb, sender, receiver, toSTAmount(result))
 
     if ter != tesSUCCESS:
         return {in: 0, out: 0}
@@ -643,19 +643,19 @@ def fwdImp(sb, afView, ofrsToRm, inAmount: XRPAmount) -> (in: XRPAmount, out: XR
 
 ```python
 def qualityUpperBound(prevStepDir: DebtDirection) -> (q: Quality, dir: DebtDirection):
-    return {QUALITY_ONE, "issues")
+    return {QUALITY_ONE, "issues"}
 ```
 
 ## 3.4. `check` Implementation
 
 [^xrpendpointstep-check]: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L338-L375)
 
-`XRPEndpointStep::check`[^xrpendpointstep-check] verifies the account exists, ensures the step is at a strand boundary (first or last position), checks for XRP freeze status, and detects path loops. Can return one of the following errors:
+`XRPEndpointStep::check`[^xrpendpointstep-check] verifies the account exists, ensures the step is at a strand boundary (first or last position), checks for an account/trust-line freeze, and detects path loops. Can return one of the following errors:
 
 - `temBAD_PATH`[^xrpcheck-bad-path-null][^xrpcheck-bad-path-boundary]: Account is null or step is not first or last in strand (XRP endpoints must be at strand boundaries)
 - `terNO_ACCOUNT`[^xrpcheck-no-account]: Account does not exist
-- `terNO_LINE`[^xrpcheck-freeze]: XRP currency is frozen
-- `temBAD_PATH_LOOP`[^xrpcheck-bad-path-loop]: Path loop detected (XRP issue appears multiple times in invalid pattern)
+- `terNO_LINE`[^xrpcheck-freeze]: a freeze applies to the endpoint account (global freeze, directional/deep trust-line freeze, or LP-token freeze), as determined by `checkFreeze`
+- `temBAD_PATH_LOOP`[^xrpcheck-bad-path-loop]: Path loop detected (the XRP asset already appears in the `seenDirectAssets` loop-detection set for this direction)
 
 [^xrpcheck-bad-path-null]: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L343)
 [^xrpcheck-bad-path-boundary]: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L357)
@@ -673,7 +673,7 @@ MPTEndpointStep handles Multi-Purpose Token (MPT) transfers at the source or des
 
 For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the issuing step (when `qualitiesSrcIssues` sees that the previous step redeemed). See [Direct MPT Payment Execution](../payments/README.md#43-mpt-payment-execution) for detailed holder-to-holder transfer mechanics.
 
-For non-issuer accounts, authorization is validated via `requireAuth`[^mpt-require-auth], which checks the [`lsfMPTRequireAuth`](../mpts/README.md#2121-flags) flag on the issuance and the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken. When the issuance has a [DomainID](../mpts/README.md#11-domainid-and-authorization) set, credentials are validated against that domain. DEX operations validate the [`lsfMPTCanTrade`](../mpts/README.md#2121-flags) flag via [`canTrade`](../mpts/README.md#361-cantrade); issuance- and holder-level lock flags are checked separately by `isFrozen`.
+For non-issuer accounts, authorization is validated via `requireAuth`[^mpt-require-auth], which checks the [`lsfMPTRequireAuth`](../mpts/README.md#2121-flags) flag on the issuance and the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken. When the issuance has a [DomainID](../mpts/README.md#11-domainid-and-authorization) set, credentials are validated against that domain. DEX operations validate the [`lsfMPTCanTrade`](../mpts/README.md#2121-flags) flag via [`canTrade`](../mpts/README.md#361-cantrade); issuance- and holder-level lock flags are checked separately by `isGlobalFrozen` and `isIndividualFrozen`.
 
 [^mpt-require-auth]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L342-L349)
 
@@ -681,7 +681,7 @@ For non-issuer accounts, authorization is validated via `requireAuth`[^mpt-requi
 
 [^mptendpointstep-revimp]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L469-L549)
 
-`MPTEndpointStep::revImp`[^mptendpointstep-revimp] starts by determining the maximum flow by calling `accountHolds`, which returns different values depending on the source: for holders, it reads the `MPTAmount` from the holder's MPToken entry; for the issuer, it calculates available capacity as `MaximumAmount - OutstandingAmount`. The `accountHolds` call uses `fhIGNORE_FREEZE` and `ahIGNORE_AUTH` flags to skip freeze and authorization checks, since those validations are performed separately in the `check()` method during path validation.
+`MPTEndpointStep::revImp`[^mptendpointstep-revimp] starts by determining the maximum flow by calling `accountFunds`, which returns different values depending on the source: for holders, it reads the `MPTAmount` from the holder's MPToken entry; for the issuer, it calculates available capacity as `MaximumAmount - OutstandingAmount`. The `accountFunds` call uses `FreezeHandling::IgnoreFreeze` and `AuthHandling::IgnoreAuth` flags to skip freeze and authorization checks, since those validations are performed separately in the `check()` method during path validation.
 
 When a holder is the source (redeeming), flow is limited by the holder's balance. When the issuer is the source, the behavior depends on whether this is a direct payment or part of a multi-step path. For direct issuer-to-holder payments (no previous step, such as when the issuer sends MPT directly to a holder without path finding or currency conversion), flow is limited by available capacity (`MaximumAmount - OutstandingAmount`). For multi-step paths where the issuer is the last step, the implementation cannot determine the actual capacity limit yet because the previous step's direction (issuing or redeeming) affects the net change to `OutstandingAmount`. In holder-to-holder transfers, the previous step redeems (decreasing `OutstandingAmount`) before this step issues (increasing it), so the net effect may be zero or even a decrease despite this step appearing to "issue" tokens. Therefore, when there's a previous step, `maxPaymentFlow` returns `MaximumAmount` to avoid prematurely limiting flow, letting the previous step determine the actual constraint.
 
@@ -689,7 +689,7 @@ When a holder is the source (redeeming), flow is limited by the holder's balance
 1. Step 1 (first): Holder A -> Issuer (redeems 100, will decrease `OutstandingAmount` to 850)
 2. Step 2 (last): Issuer -> Holder B (issues 100, will increase `OutstandingAmount` to 950)
 
-During the reverse pass, Step 2 is evaluated first. At this point, `accountHolds` for the issuer returns `MaximumAmount - OutstandingAmount = 50`, suggesting only 50 MPT can flow. However, this is incorrect because Step 1 hasn't been evaluated yet. Once Step 1 redeems 100 MPT, there will be sufficient capacity. By returning `MaximumAmount = 1000` from `maxPaymentFlow`, Step 2 doesn't artificially limit the flow, and Step 1's balance (which limits to 100) becomes the actual constraint.
+During the reverse pass, Step 2 is evaluated first. At this point, `accountFunds` for the issuer returns `MaximumAmount - OutstandingAmount = 50`, suggesting only 50 MPT can flow. However, this is incorrect because Step 1 hasn't been evaluated yet. Once Step 1 redeems 100 MPT, there will be sufficient capacity. By returning `MaximumAmount = 1000` from `maxPaymentFlow`, Step 2 doesn't artificially limit the flow, and Step 1's balance (which limits to 100) becomes the actual constraint.
 
 Transfer fees apply when the issuer issues and the previous step redeems.
 
@@ -703,7 +703,7 @@ def revImp(sb, afView, ofrsToRm, out: MPTAmount) -> (in: MPTAmount, out: MPTAmou
 
     # Determine max flow and direction
     maxSrcToDst, srcDebtDir = maxPaymentFlow(sb)
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::reverse)
+    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Reverse)
 
     if maxSrcToDst <= 0:
         resetCache(srcDebtDir)
@@ -721,7 +721,7 @@ def revImp(sb, afView, ofrsToRm, out: MPTAmount) -> (in: MPTAmount, out: MPTAmou
         in = roundUp(srcToDst * srcQOut / QUALITY_ONE)
         cache_ = {in, srcToDst, srcToDst, srcDebtDir}
 
-        ter = rippleCredit(sb, src_, dst_, srcToDst, checkIssuer=False)
+        ter = directSendNoFee(sb, src_, dst_, srcToDst, checkIssuer=False)
         if ter != tesSUCCESS:
             resetCache(srcDebtDir)
             return {0, 0}
@@ -732,7 +732,7 @@ def revImp(sb, afView, ofrsToRm, out: MPTAmount) -> (in: MPTAmount, out: MPTAmou
         actualOut = maxSrcToDst
         cache_ = {in, maxSrcToDst, actualOut, srcDebtDir}
 
-        ter = rippleCredit(sb, src_, dst_, maxSrcToDst, checkIssuer=False)
+        ter = directSendNoFee(sb, src_, dst_, maxSrcToDst, checkIssuer=False)
         if ter != tesSUCCESS:
             resetCache(srcDebtDir)
             return {0, 0}
@@ -743,7 +743,7 @@ def revImp(sb, afView, ofrsToRm, out: MPTAmount) -> (in: MPTAmount, out: MPTAmou
 
 ```python
 def maxPaymentFlow(sb: ReadView) -> (MPTAmount, DebtDirection):
-    maxFlow = accountHolds(src_, mptIssue_, fhIGNORE_FREEZE, ahIGNORE_AUTH)
+    maxFlow = accountFunds(src_, mptIssue_, FreezeHandling::IgnoreFreeze, AuthHandling::IgnoreAuth)
 
     # Holder to issuer (redeeming)
     if src_ != issuer:
@@ -758,7 +758,7 @@ def maxPaymentFlow(sb: ReadView) -> (MPTAmount, DebtDirection):
 
         # Last step with issuer as source
         # Allow temporary overflow - previous step limits flow
-        maxAmount = sle[sfMaximumAmount] or maxMPTokenAmount
+        maxAmount = sle[sfMaximumAmount] or kMaxMpTokenAmount
         return {maxAmount, "issues"}
 
     return {0, "issues"}
@@ -777,7 +777,7 @@ def fwdImp(sb, afView, ofrsToRm, in: MPTAmount) -> (in: MPTAmount, out: MPTAmoun
     assert cache_ is not None
 
     maxSrcToDst, srcDebtDir = maxPaymentFlow(sb)
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::forward)
+    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Forward)
 
     if maxSrcToDst <= 0:
         resetCache(srcDebtDir)
@@ -793,7 +793,7 @@ def fwdImp(sb, afView, ofrsToRm, in: MPTAmount) -> (in: MPTAmount, out: MPTAmoun
         setCacheLimiting(in, srcToDst, out, srcDebtDir)
 
         # Transfer MPT using cached amount from reverse pass
-        ter = rippleCredit(sb, src_, dst_, toSTAmount(cache_.srcToDst, mptIssue_), checkIssuer=False)
+        ter = directSendNoFee(sb, src_, dst_, toSTAmount(cache_.srcToDst, mptIssue_), checkIssuer=False)
         if ter != tesSUCCESS:
             resetCache(srcDebtDir)
             return {0, 0}
@@ -803,7 +803,7 @@ def fwdImp(sb, afView, ofrsToRm, in: MPTAmount) -> (in: MPTAmount, out: MPTAmoun
         setCacheLimiting(actualIn, maxSrcToDst, out, srcDebtDir)
 
         # Transfer MPT using cached amount from reverse pass
-        ter = rippleCredit(sb, src_, dst_, toSTAmount(cache_.srcToDst, mptIssue_), checkIssuer=False)
+        ter = directSendNoFee(sb, src_, dst_, toSTAmount(cache_.srcToDst, mptIssue_), checkIssuer=False)
         if ter != tesSUCCESS:
             resetCache(srcDebtDir)
             return {0, 0}
@@ -830,7 +830,7 @@ Transfer fees only apply when tokens move between holders through the issuer as 
 
 ```python
 def qualityUpperBound(sb, prevStepDir: DebtDirection) -> (Quality, DebtDirection):
-    dir = debtDirection(sb, StrandDirection::forward)
+    dir = debtDirection(sb, StrandDirection::Forward)
 
     if dir == "redeems":
         srcQOut, dstQIn = qualitiesSrcRedeems(sb)
@@ -880,13 +880,16 @@ def qualitiesSrcIssues(prevStepDebtDirection: DebtDirection) -> (uint32, uint32)
 [^mptendpointstep-check-bad-path-loop]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L877-L883)
 [^mptendpointstep-check-bad-path-boundary]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L885-L890)
 [^mptendpointstep-check-bad-path-issuer]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L892-L897)
+[^mpt-common-freeze]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L849-L856)
+[^mpt-common-seenbookouts]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L858-L873)
 
 - `temBAD_PATH`:
   - Source/destination is null, or source equals destination[^mptendpointstep-check-bad-path-null][^mptendpointstep-check-bad-path-same]
   - Step not at strand boundary (MPT endpoints must be first or last)[^mptendpointstep-check-bad-path-boundary]
   - Invalid src/dst (exactly one must be issuer)[^mptendpointstep-check-bad-path-issuer]
 - `terNO_ACCOUNT`[^mptendpointstep-check-no-account]: Source account does not exist
-- `temBAD_PATH_LOOP`[^mptendpointstep-check-bad-path-loop]: MPT issue appears multiple times in the same role (source or destination) within a strand. Since MPTEndpointStep can only appear at strand boundaries, each strand tracks seen assets separately for source-side (`seenDirectAssets[0]`) and destination-side (`seenDirectAssets[1]`). If the same MPT issue appears twice on the same side, it would count the same issuer's liquidity pool multiple times, leading to incorrect flow calculations
+- `terLOCKED`[^mpt-common-freeze]: the MPT is frozen at the endpoint account. A global freeze applies on the first step, or the holder's MPToken is individually frozen. This check is skipped when the step is both first and last (a pure issuer/holder issue or redeem).
+- `temBAD_PATH_LOOP`[^mptendpointstep-check-bad-path-loop]: MPT issue appears multiple times in the same role (source or destination) within a strand. Since MPTEndpointStep can only appear at strand boundaries, each strand tracks seen assets separately for source-side (`seenDirectAssets[0]`) and destination-side (`seenDirectAssets[1]`). If the same MPT issue appears twice on the same side, it would count the same issuer's liquidity pool multiple times, leading to incorrect flow calculations. `temBAD_PATH_LOOP` is also returned if this MPT issue was already produced as a book step's output earlier in the strand, tracked in `seenBookOuts`[^mpt-common-seenbookouts]
 
 **Payment-specific (`MPTEndpointPaymentStep`):**[^mptendpointstep-check-payment]
 
@@ -906,11 +909,9 @@ def qualitiesSrcIssues(prevStepDebtDirection: DebtDirection) -> (uint32, uint32)
   - `tecOBJECT_NOT_FOUND`: Issuance doesn't exist
   - `tecNO_AUTH`: Can't transfer between holders
 - DEX crossing[^mptendpointstep-check-payment-dex]: [`canTrade`](../mpts/README.md#361-cantrade) when crossing order books
-  - `tecNO_ISSUER`: Issuer account doesn't exist
   - `tecOBJECT_NOT_FOUND`: Issuance doesn't exist
-  - `tecLOCKED`: Issuance or holder MPToken is locked
-  - `tecNO_PERMISSION`: Can't trade on DEX or can't transfer
-- `tecPATH_DRY`[^mptendpointstep-check-payment-dry]: Source balance is zero or negative (first step only)
+  - `tecNO_PERMISSION`: `lsfMPTCanTrade` flag not set
+- `tecPATH_DRY`[^mptendpointstep-check-payment-dry]: Source balance is zero or negative; for an issuer source, no remaining issuance capacity (first step only)
 
 **Offer crossing-specific (`MPTEndpointOfferCrossingStep`):**[^mptendpointstep-check-offer]
 
@@ -937,7 +938,7 @@ The reverse pass (`revImp`) works backwards from the desired output amount, iter
 
 **Implementation Architecture:**
 
-In the actual implementation, both `revImp` and `fwdImp` create lambda functions called `eachOffer` that capture local variables (like `remainingOut`/`remainingIn`, `savedIns`, `savedOuts`, and `result`) by reference. Each method calls `forEachOffer()`, passing its lambda as the callback parameter.
+In the actual implementation, both `revImp`[^revimp-eachoffer] and `fwdImp`[^fwdimp-eachoffer] create lambda functions called `eachOffer` that capture local variables (like `remainingOut`/`remainingIn`, `savedIns`, `savedOuts`, and `result`) by reference. Each method calls `forEachOffer()`, passing its lambda as the callback parameter.
 
 [^revimp-eachoffer]: `revImp` lambda callback creation: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L1019-L1064)
 [^fwdimp-eachoffer]: `fwdImp` lambda callback creation: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L1128-L1225)
@@ -950,7 +951,7 @@ Inside `forEachOffer`, the first CLOB offer is fetched from the order book[^fore
 The `eachOffer` callback first checks if `remainingOut <= 0` and returns `false` if the payment is already satisfied. Otherwise, it compares `stpAmt.out` (the amount that will flow through this step after accounting for transfer fees and owner funding)[^stpamt-calculation] against `remainingOut`. If the offer's output is less than or equal to the remaining output needed (`stpAmt.out <= remainingOut`), the offer is fully consumable - it consumes the offer and records its contribution to the step's total input and output, then returns `true` to continue (even if this offer satisfied the full amount, the callback returns `true` to ensure the offer is properly consumed; the next iteration will detect the zero remaining and stop).
 If the offer's output exceeds the remaining output needed (`stpAmt.out > remainingOut`), it calls `limitStepOut()` to adjust the amounts down to exactly what's needed, then partially consumes the offer and records the adjusted contribution, returning whether to continue based on whether the offer is fully consumed. When the callback returns `false`, `forEachOffer` stops iterating and returns control back to `revImp` or `fwdImp`.
 
-[^stpamt-calculation]: Step amount calculation with transfer fees and owner funding: [`BookStep.cpp:776-804`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L769-L792)
+[^stpamt-calculation]: Step amount calculation with transfer fees and owner funding: [`BookStep.cpp:769-792`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L769-L792)
 
 This callback architecture separates concerns: `forEachOffer` handles iteration mechanics - traversing the order book directory, generating AMM synthetic offers via `getAMMOffer`, comparing CLOB vs AMM quality to select the better source, performing asset-specific authorization checks, and verifying offer funding. The callback handles consumption decisions - comparing offer amounts against remaining needs and calling `limitStepOut` (adjusts offer amounts down when output exceeds what's needed) or `limitStepIn` (adjusts offer amounts down when input is limited) to scale offers appropriately. After the callback determines the amounts, it invokes `consumeOffer`, which performs the actual ledger updates: for CLOB offers, it adjusts the offer's TakerPays/TakerGets amounts and marks fully consumed offers for deletion; for AMM offers, it updates the AMM pool balances by transferring assets to/from the AMM account using `accountSend`.
 
@@ -1000,11 +1001,14 @@ def forEachOffer(sb, callback):
             break
 
 
+# Real signature: consumeOffer(sb, offer, ofrAmt, stepAmt, ownerGives);
+# the overview passes a single stpAmt for brevity.
 def consumeOffer(sb, offer, stpAmt):
-    if offer.isCLOB():
-        updateOfferAmounts(sb, offer, stpAmt)
-    else:
-        updateAMMPool(sb, offer, stpAmt)
+    # No isCLOB() branch: CLOB vs AMM is polymorphic, handled inside
+    # the offer.send() and offer.consume() methods.
+    offer.checkInvariant(stpAmt)   # AMM pool-product invariant (fixAMMOverflowOffer)
+    offer.send(...)                # two transfers: owner receives input, pays output (with fees)
+    offer.consume(sb, stpAmt)      # CLOB: reduce/delete offer; AMM: update pool balances
 ```
 
 **Offer Iteration and Funding:**
@@ -1029,7 +1033,7 @@ For non-issuers, `TOfferStreamBase` queries the owner's actual available balance
 
 [^offerstream-funds-helper]: Owner funds verification via `accountFundsHelper`: [`OfferStream.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/OfferStream.cpp#L104-L130)
 
-If the owner's balance is less than takerGets, the offer is underfunded but can still partially fill. The `TOfferStreamBase::ownerFunds()` method returns this actual available balance, which `forEachOffer` uses to proportionally adjust the offer amounts via `Quality::ceil_out()`.
+If the owner's balance is less than takerGets, the offer is underfunded but can still partially fill. The `TOfferStreamBase::ownerFunds()` method returns this actual available balance, which `forEachOffer` uses to proportionally adjust the offer amounts via `Quality::ceilOutStrict()`.
 This adjustment maintains the offer's exchange rate while scaling down the size to match available funds, enabling offers to partially fill when the owner has insufficient balance. 
 The adjustment rounds down under the `fixReducedOffersV1` amendment to prevent order book blocking where dust amounts could prevent offer consumption.
 
@@ -1039,7 +1043,7 @@ BookStep handles three asset types, each with different authorization requiremen
 
 - **XRP**: No authorization checks required. Any account can hold XRP.
 - **Tokens (IOUs)**: Checked via `requireAuth`, which verifies the offer owner either has a trust line to the token issuer, or the issuer doesn't require authorization (`lsfRequireAuth` flag). If the issuer requires auth and the owner lacks the appropriate auth flag on their trust line, the offer is marked for removal.
-- **MPTs**: Require both `requireAuth` (which checks the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken) and [`canTransfer`](../mpts/README.md#362-cantransfer) (which verifies the [`lsfMPTCanTransfer`](../mpts/README.md#2121-flags) flag; lock status is checked separately by `isFrozen`). When crossing offers where the owner will receive an MPT, if the owner doesn't have an MPToken entry, BookStep automatically creates it via `checkCreateMPT`.
+- **MPTs**: Require `requireAuth` (which checks the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken) and `checkMPTDEX`, the MPT DEX permission check (it runs [`canTrade`](../mpts/README.md#361-cantrade) on both book assets and, where the owner is not the issuer, [`canTransfer`](../mpts/README.md#362-cantransfer) for the [`lsfMPTCanTransfer`](../mpts/README.md#2121-flags) flag). When crossing offers where the owner will receive an MPT, if the owner doesn't have an MPToken entry, BookStep automatically creates it via `checkCreateMPT`.
 
 [^bookstep-auth]: Asset authorization checks and MPToken creation in BookStep: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L729-L760)
 
@@ -1143,7 +1147,7 @@ def revImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
 
     # Check if we consumed too many offers. Prevents DoS attacks where malicious actors
     # create many tiny unfunded offers to force expensive iteration
-    if offersConsumed >= maxOffersToConsume:
+    if offersConsumed >= kMaxOffersToConsume:
         # Use the liquidity we found but mark this path as "dry" so it won't be tried
         # again in future iterations of this payment
         inactive_ = True
@@ -1300,7 +1304,7 @@ def fwdImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
     offersToRemove.union(removedOffers)
 
     # Check if we consumed too many offers. Prevents DoS attacks
-    if offersConsumed >= MaxOffersToConsume:
+    if offersConsumed >= kMaxOffersToConsume:
         # Use the liquidity but mark strand as inactive (dry)
         inactive_ = True
 
@@ -1334,7 +1338,7 @@ Given a callback function and the previous step's debt direction, this function:
 4. For each offer, performs asset-specific validation:
    - Creates MPToken for the offer owner if input is MPT (if it does not already exist) 
    - Validates authorization via `requireAuth` (Tokens check trust lines, MPTs check holder authorization)
-   - For MPTs, validates transfer permission via `canTransfer`
+   - For MPTs, validates DEX/transfer permission via `checkMPTDEX` (`canTrade` plus `canTransfer`)
    - Checks offer funding and calculates transfer fees
    - For MPT input on the first step, limits input amount to prevent issuer overflow. `MaximumAmount - OutstandingAmount` should never become negative.
 5. Calls the callback with calculated amounts (offer amount, step amount, owner gives, transfer rates)
@@ -1402,9 +1406,9 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
         # Code comment: Make sure offer owner has authorization to own Assets from issuer
         # if IOU. An account can always own XRP or their own Assets.
         # If MPT then MPTDEX should be allowed.
+        # requireAuth uses applyView; the MPT DEX check (checkMPTDEX) uses sb.
         if (requireAuth(applyView, assetIn, owner) != tesSUCCESS or
-            (isAssetInMPT and canTransfer(applyView, assetIn, owner, owner) != tesSUCCESS) or
-            (isAssetOutMPT and canTransfer(applyView, assetOut, owner, owner) != tesSUCCESS)):
+            not checkMPTDEX(sb, owner)):
             # Code comment: Offer owner not authorized to hold IOU/MPT from issuer.
             # Remove this offer even if no crossing occurs.
             if offer.key():
@@ -1448,7 +1452,7 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
             stpAmt.out = mulRatio(ownerGives, QUALITY_ONE, ofrOutRate, roundUp=False)
 
             # Code comment: It turns out we can prevent order book blocking by (strictly)
-            # rounding down the ceil_out() result. This adjustment changes
+            # rounding down the ceilOutStrict() result. This adjustment changes
             # transaction outcomes, so it must be made under an amendment.
             ofrAmt = offer.limitOut(ofrAmt, stpAmt.out, roundUp=False)
 
@@ -1459,7 +1463,7 @@ def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
         # by the issuer. Otherwise, OutstandingAmount may overflow.
         issuer = assetIn.getIssuer()
         if isAssetInMPT and not prevStep_ and owner != issuer:
-            available = accountHolds(sb, issuer, assetIn, fhIGNORE_FREEZE, ahIGNORE_AUTH)
+            available = accountFunds(sb, issuer, assetIn, FreezeHandling::IgnoreFreeze, AuthHandling::IgnoreAuth)
             if stpAmt.in > available:
                 limitStepIn(offer, ofrAmt, stpAmt, ownerGives, ofrInRate, ofrOutRate, available)
 
@@ -1601,7 +1605,7 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
     
     # ammContext is instance variable
     if ammContext.maxItersReached():
-        return None  # Already consumed AMM liquidity 30 times
+        return None  # AMM liquidity already consumed in 30 iterations (kMaxIterations cap)
 
     # Fetch current pool balances from ledger
     #   balances.in:  Amount of input currency in the pool (what taker pays to pool)
@@ -1631,12 +1635,12 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
         baseOut = swapAssetIn(initialBalances, offerIn, tradingFee) # ../amms/helpers.md#311-swapassetin
 
         # Scale by Fibonacci number for this iteration
-        fibonacci = [1, 1, 2, 3, 5, 8, 13, 21 ... 1346269]
+        fibonacci = [1, 1, 2, 3, 5, 8, 13, 21 ... 832040]
         fibMultiplier = fibonacci[iteration]
         offerOut = baseOut * fibMultiplier
 
         # Calculate required input to produce scaled output
-        offerIn = swapAssetOut(balances, offerOut, tradingFee) # ../amms/helpers.md#212-swapassetout
+        offerIn = swapAssetOut(balances, offerOut, tradingFee) # ../amms/helpers.md#312-swapassetout
 
         amounts = {in: offerIn, out: offerOut}
         if clobQuality and Quality(amounts) < clobQuality:
@@ -1647,7 +1651,7 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
             
             if not amounts:
                 # Return the biggest size this AMM can provide
-                maxAMMOffer = maxOffer(balances, tradingFee)
+                maxAMMOffer = maxOffer(balances, rules)
                 
                 # If maxAMMOffer provides better quality than clobQuality
                 if maxAMMOffer and Quality(maxAMMOffer.amounts) > clobQuality:
@@ -1657,7 +1661,7 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
         else:
             # No CLOB to compete against, offer maximum liquidity
             # With fixAMMOverflowOffer: 99% of pool balance
-            amounts = maxOffer(balances, tradingFee)
+            amounts = maxOffer(balances, rules)
 
     offerQuality = amounts.in / amounts.out
     return AMMOffer(
@@ -1672,7 +1676,9 @@ def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffe
 
 Multi-path payments have multiple strands competing to provide liquidity. The Payment engine uses an iterative algorithm: in each iteration, it evaluates all available strands, ranks them by quality (exchange rate), and executes the highest-quality strand. This process repeats until the payment is fulfilled, ensuring the sender gets the best overall rate by consuming the most efficient liquidity sources first. `BookStep::forEachOffer()` alternates between CLOB and AMM offers, selecting whichever provides better quality.
 
-When ammContext is `multiPath`, AMM offers are sized using a Fibonacci sequence. In the first iteration, as tracked in `ammContext`, AMM creates a synthetic offer that is 0.025% of the pool size. Each subsequent offer from a single AMM pool gets multiplied by the next number in the Fibonacci sequence.
+When ammContext is `multiPath`, AMM offers are sized using a Fibonacci sequence. In the first iteration, as tracked in `ammContext`, AMM creates a synthetic offer that is 0.025% of the pool size.[^multipath-iter0] Each subsequent offer from a single AMM pool gets multiplied by the next number in the Fibonacci sequence.
+
+[^multipath-iter0]: The source returns this base (iteration-0) offer directly; the Fibonacci scaling and the `swapAssetOut` input recompute shown in the pseudo-code apply only from iteration 1 onward (`kFib` is indexed by `curIters() - 1`): [`AMMLiquidity.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/AMMLiquidity.cpp#L63-L100)
 
 As the desired offer output increases, the required input progressively increases, degrading the exchange rate for the taker. See [Swap Formulas](../amms/helpers.md#313-slippage-and-quality-degradation) for slippage examples.
 
@@ -1689,9 +1695,9 @@ If there are no CLOB offers that can compete, AMM pool will quickly offer a larg
 Each `AMMLiquidity` instance tracks the pool's initial balances (when the BookStep was created) and fetches current balances before each offer generation. This allows the algorithm to maintain consistent base sizing while accounting for liquidity changes as offers are consumed.
 
 1. Calculate base offer: `0.00025 * initialBalances.in` (0.025% of the pool's input asset balance at BookStep creation)
-2. Apply trading fee to base: `baseOut = `[`swapAssetIn`](../amms/helpers.md#211-swapassetin)`(initialBalances, baseOfferIn, fee)` - calculates output for the base-sized input using the initial pool state
+2. Apply trading fee to base: `baseOut = `[`swapAssetIn`](../amms/helpers.md#311-swapassetin)`(initialBalances, baseOfferIn, fee)` - calculates output for the base-sized input using the initial pool state
 3. Scale by Fibonacci: `scaledOut = baseOut * fib[iteration]` where `fib = [1, 1, 2, 3, 5, 8, 13, ...]` - grows the offer size exponentially across iterations
-4. Recalculate input with current state: `scaledIn = `[`swapAssetOut`](../amms/helpers.md#212-swapassetout)`(currentBalances, scaledOut, fee)` - determines required input for the scaled output using current pool balances (which may have changed as previous offers were consumed)
+4. Recalculate input with current state: `scaledIn = `[`swapAssetOut`](../amms/helpers.md#312-swapassetout)`(currentBalances, scaledOut, fee)` - determines required input for the scaled output using current pool balances (which may have changed as previous offers were consumed)
 
 #### 5.4.3.3. Single-Path Mode: CLOB-Matching Sizing
 
@@ -1801,10 +1807,15 @@ For payments, apply transfer fees conditionally based on debt direction and offe
 ```python
 def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
     def rate(asset):
-        if isXRP(asset) or asset.getIssuer() == strandDst_:
+        if isXRP(asset):
             return QUALITY_ONE
-        if asset.isToken():
+        if asset.isToken():  # IOU
+            if asset.getIssuer() == strandDst_:
+                return QUALITY_ONE
             return transferRate(asset.getIssuer())
+        # MPT: parity only when this is the strand's delivered asset AND its issuer is the destination
+        if asset == strandDeliver_ and asset.getIssuer() == strandDst_:
+            return QUALITY_ONE
         return transferRate(asset.getMptID())
 
     # Input transfer rate: only charged when previous step redeems
@@ -1817,7 +1828,7 @@ def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
         trOut = QUALITY_ONE
 
     # Compose transfer fees with offer quality
-    feeQuality = Quality(trOut / trIn)
+    feeQuality = Quality(getRate(trOut, trIn))
     return composedQuality(feeQuality, ofrQ)
 ```
 
@@ -1850,16 +1861,21 @@ def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
     # Single-path AMM offers: must factor in transfer-in rate
     # Single-path AMM offer quality is not constant (changes as pool depletes)
     def rate(asset):
-        if isXRP(asset) or asset.getIssuer() == strandDst_:
+        if isXRP(asset):
             return QUALITY_ONE
-        if asset.isToken():
+        if asset.isToken():  # IOU
+            if asset.getIssuer() == strandDst_:
+                return QUALITY_ONE
             return transferRate(asset.getIssuer())
+        # MPT: parity only when this is the strand's delivered asset AND its issuer is the destination
+        if asset == strandDeliver_ and asset.getIssuer() == strandDst_:
+            return QUALITY_ONE
         return transferRate(asset.getMptID())
 
     trIn = rate(book_.in) if redeems(prevStepDir) else QUALITY_ONE
     trOut = QUALITY_ONE  # AMM doesn't pay transfer fee on output
 
-    feeQuality = Quality(trOut / trIn)
+    feeQuality = Quality(getRate(trOut, trIn))
     return composedQuality(feeQuality, ofrQ)
 ```
 
@@ -1872,6 +1888,7 @@ The `check` method validates the BookStep configuration and ensures no loops exi
 - `temBAD_PATH`: Currency is inconsistent with issuer (XRP with non-XRP issuer or vice versa)
 - `temBAD_PATH_LOOP`: Book output asset already seen in another BookStep or DirectStep (prevents offer unfunding loops)
 - `tecNO_ISSUER`: Input or output issuer account does not exist
+- For MPT assets (checked unconditionally, regardless of the previous step): `tecOBJECT_NOT_FOUND` if an MPT issuance does not exist, and a DEX permission check via [`canTrade`](../mpts/README.md#361-cantrade) on both the book input and output assets
 
 **Asset-specific checks (when previous step is DirectStep or MPTEndpointStep):**
 
@@ -1879,6 +1896,4 @@ For **Tokens**:
 - `terNO_LINE`: Trust line does not exist between previous step source and book input issuer
 - `terNO_RIPPLE`: Trust line has NoRipple flag set
 
-For **MPTs**:
-- `tecOBJECT_NOT_FOUND`: MPT issuance does not exist
-- DEX permission check via [`canTrade`](../mpts/README.md#361-cantrade) for the book input issuer
+For **MPTs**: the previous-step-gated block performs no additional check (it returns no error for MPT).
