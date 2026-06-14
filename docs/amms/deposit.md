@@ -50,14 +50,14 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     ePrice = tx[sfEPrice]
     ammSle = sb.getAMM(amount, amount2)
     if not ammSle:
-        return tecInternal
+        return tecINTERNAL
 
     ammAccountId = ammSle[sfAccount]
 
     # In `rippled`, this is called "expected", but probably only to reflect the returned type. A better name is "existing" or "currentBalances"
-    # ZERO_IF_FROZEN: treat frozen assets as having zero balance
-    # ZERO_IF_UNAUTHORIZED: treat unauthorized MPT holders as having zero balance
-    currentBalances = ammHolds(sb, ammSle, amount, amount2, ZERO_IF_FROZEN, ZERO_IF_UNAUTHORIZED)
+    # FreezeHandling::ZeroIfFrozen: treat frozen assets as having zero balance
+    # AuthHandling::ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
+    currentBalances = ammHolds(sb, ammSle, amount, amount2, FreezeHandling::ZeroIfFrozen, AuthHandling::ZeroIfUnauthorized)
     if not currentBalances:
         return currentBalances.error()
 
@@ -74,7 +74,7 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
         # Normal pool: get current trading fee (with potential discount)
         # Returns discounted fee if account is auction slot holder or authorized
         # Otherwise returns regular AMM trading fee
-        tfee = getTradingFee(view, ammSle, account_)
+        tfee = getTradingFee(view, ammSle, accountID_)
 
     subTxType = tx.getFlags() & tfDepositSubTx
 
@@ -151,7 +151,7 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
             ammAccountID,
             amount,              # amount1 to deposit
             amount2,             # amount2 to deposit
-            lptAMMBalance.issue,
+            lptAMMBalance.asset(),
             tfee
         )
 
@@ -171,8 +171,8 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
             initializeFeeAuctionVote(
                 sb,
                 ammSle,
-                account_,
-                lptAMMBalance.issue,
+                accountID_,
+                lptAMMBalance.asset(),
                 tfee
             )
 
@@ -188,7 +188,7 @@ The `getTradingFee` function[^get-trading-fee] is called by [`applyGuts`](#2-app
 
 It checks if the depositor holds the [auction slot](README.md#121-auction-slot) or is listed in the slot's authorized accounts and if the auction slot has not expired. If so, it returns the discounted fee (1/10th of the regular fee). Otherwise, it returns the AMM's standard trading fee.
 
-[^get-trading-fee]: `getTradingFee`: [`AMMUtils.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L566-L593)  
+[^get-trading-fee]: `getTradingFee`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L566-L593)  
 
 ## 3.1. getTradingFee Pseudo-Code
 
@@ -345,7 +345,7 @@ Proportional deposit for exact LP tokens.[^equal-deposit-tokens]
 
 [^equal-deposit-tokens]: `AMMDeposit::equalDepositTokens`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L637-L679)
 
-This function handles the reverse calculation from [`equalDepositLimit`](#41-equaldepositlimit-tfTwoAsset): the user specifies the exact number of LP tokens they want to receive, and the function calculates the required proportional amounts of both assets. The user provides `LPTokenOut` (exact LP tokens desired) and optionally `Amount` and `Amount2` as minimum constraints on the deposit amounts. The function first adjusts the requested LP tokens for precision using [`adjustLPTokensOut`](helpers.md#24-adjustlptokensout-deposits), then calculates the pool fraction these tokens represent (`frac = tokensAdj / lptAMMBalance`). Using this fraction, it calculates the required amounts of both assets by multiplying each pool balance by the fraction, rounding up with [`getRoundedAsset`](helpers.md#23-getroundedasset) to ensure the pool receives sufficient assets. If the calculated deposit amounts are less than the optional `Amount` and `Amount2` minimums, the transaction fails with `tecAMM_FAILED`.
+This function handles the reverse calculation from [`equalDepositLimit`](#41-equaldepositlimit-tftwoasset): the user specifies the exact number of LP tokens they want to receive, and the function calculates the required proportional amounts of both assets. The user provides `LPTokenOut` (exact LP tokens desired) and optionally `Amount` and `Amount2` as minimum constraints on the deposit amounts. The function first adjusts the requested LP tokens for precision using [`adjustLPTokensOut`](helpers.md#24-adjustlptokensout-deposits), then calculates the pool fraction these tokens represent (`frac = tokensAdj / lptAMMBalance`). Using this fraction, it calculates the required amounts of both assets by multiplying each pool balance by the fraction, rounding up with [`getRoundedAsset`](helpers.md#23-getroundedasset) to ensure the pool receives sufficient assets. If the calculated deposit amounts are less than the optional `Amount` and `Amount2` minimums, the transaction fails with `tecAMM_FAILED`.
 
 **Example:**
 
@@ -561,7 +561,7 @@ Deposit a single asset with an effective price limit.[^single-deposit-eprice]
 
 [^single-deposit-eprice]: `AMMDeposit::singleDepositEPrice`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L894-L991)
 
-This mode allows users to control the maximum [effective price](README.md#121-effective-price) they're willing to pay per LP token (effective price = asset deposited / LP tokens received). The user provides `EPrice` (maximum effective price) and `Amount` (deposit amount, or zero). 
+This mode allows users to control the maximum [effective price](README.md#114-effective-price) they're willing to pay per LP token (effective price = asset deposited / LP tokens received). The user provides `EPrice` (maximum effective price) and `Amount` (deposit amount, or zero). 
 
 There are two scenarios: If `Amount` is non-zero, the function calculates the LP tokens using [`lpTokensOut`](helpers.md#321-lptokensout-equation-3), adjusts for precision, and checks if the resulting effective price is within the limit - if acceptable, the deposit proceeds; otherwise it falls through to scenario 2. 
 
@@ -706,7 +706,7 @@ def singleDepositEPrice(
 
 The `deposit()` function[^deposit] is called by all deposit modes to perform the actual asset transfers. This function validates minimum constraints for slippage protection, checks the depositor has sufficient funds for the deposit, transfers the assets from the depositor to the AMM account, and issues LP tokens to the depositor (creating a trust line if needed).
 
-[^deposit]: AMMDeposit::deposit: [AMMDeposit.cpp:513-645](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L501-L620)
+[^deposit]: `AMMDeposit::deposit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L501-L620)
 
 ## 6.1. deposit Pseudo-Code
 

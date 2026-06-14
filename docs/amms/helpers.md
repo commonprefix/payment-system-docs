@@ -396,7 +396,7 @@ As `out` **increases**, the denominator `(B-out)` **decreases**, making quality 
 
 In `rippled`, this can be verified using `rippled --unittest=AMMCalc` and appropriate logging, e.g.: 
 ```bash
-rippled --unittest=AMMCalc --unittest-arg "swapout,A(USD(1000),EUR(10000)),EUR(5000),300
+rippled --unittest=AMMCalc --unittest-arg "swapout,A(USD(1000),EUR(10000)),EUR(5000),300"
 ```
 
 ### 3.1.4. changeSpotPriceQuality
@@ -424,7 +424,7 @@ def changeSpotPriceQuality(
     This pseudocode assumes fixAMMv1_1 is enabled
     """
 
-    if isXRP(getIssue(pool.out)):
+    if isXRP(getAsset(pool.out)):
         # TakerGets is XRP - calculate it first
         return getAMMOfferStartWithTakerGets(pool, quality, tfee)
     else:
@@ -484,7 +484,7 @@ def getAMMOfferStartWithTakerGets(pool, targetQuality, tfee):
 
     # Round takerGets downward (minimizes offer, maximizes quality)
     # This has most impact when takerGets is XRP
-    takerGets = toAmount(getIssue(pool.out), takerGets, roundingMode=downward)
+    takerGets = toAmount(getAsset(pool.out), takerGets, roundingMode=downward)
 
     # Calculate takerPays using swapAssetOut
     takerPays = swapAssetOut(pool, takerGets, tfee)
@@ -495,7 +495,7 @@ def getAMMOfferStartWithTakerGets(pool, targetQuality, tfee):
     if Quality(amounts) < targetQuality:
         # Reduce takerGets by 0.9999x and recalculate
         reducedTakerGets = takerGets * 0.9999
-        reducedTakerGets = toAmount(getIssue(pool.out), reducedTakerGets, roundingMode=downward)
+        reducedTakerGets = toAmount(getAsset(pool.out), reducedTakerGets, roundingMode=downward)
         reducedTakerPays = swapAssetOut(pool, reducedTakerGets, tfee)
         amounts = TAmounts(in=reducedTakerPays, out=reducedTakerGets)
 
@@ -572,7 +572,7 @@ def getAMMOfferStartWithTakerPays(pool, targetQuality, tfee):
 
     # Round takerPays downward (minimizes offer, maximizes quality)
     # This has most impact when takerPays is XRP
-    takerPays = toAmount(getIssue(pool.in), takerPays, roundingMode=downward)
+    takerPays = toAmount(getAsset(pool.in), takerPays, roundingMode=downward)
 
     # Calculate takerGets using swapAssetIn
     takerGets = swapAssetIn(pool, takerPays, tfee)
@@ -583,7 +583,7 @@ def getAMMOfferStartWithTakerPays(pool, targetQuality, tfee):
     if Quality(amounts) < targetQuality:
         # Reduce takerPays by 0.9999x and recalculate
         reducedTakerPays = takerPays * 0.9999
-        reducedTakerPays = toAmount(getIssue(pool.in), reducedTakerPays, roundingMode=downward)
+        reducedTakerPays = toAmount(getAsset(pool.in), reducedTakerPays, roundingMode=downward)
         reducedTakerGets = swapAssetIn(pool, reducedTakerPays, tfee)
         amounts = TAmounts(in=reducedTakerPays, out=reducedTakerGets)
 

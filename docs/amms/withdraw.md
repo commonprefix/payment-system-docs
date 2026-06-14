@@ -50,7 +50,7 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     ammAccountID = ammSle[sfAccount]
 
     # Get withdrawer's LP token balance
-    lpTokens = ammLPHolds(view, ammSle, account)
+    lpTokens = ammLPHolds(view, ammSle, accountID_)
 
     # Determine LP tokens to withdraw
     # For tfWithdrawAll and tfOneAssetWithdrawAll: use all LP tokens
@@ -60,15 +60,16 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     # Adjust LP token balance for precision (with fixAMMv1_1)
     # This handles rounding issues for the last LP
     if rules.enabled(fixAMMv1_1):
-        verifyAndAdjustLPTokenBalance(sb, lpTokens, ammSle, account)
+        if not verifyAndAdjustLPTokenBalance(sb, lpTokens, ammSle, accountID_):
+            return (tecAMM_INVALID_TOKENS, false)
 
     # Get current trading fee (with potential discount)
-    tfee = getTradingFee(view, ammSle, account)
+    tfee = getTradingFee(view, ammSle, accountID_)
 
     # Get current pool balances
-    # ZERO_IF_FROZEN: treat frozen assets as having zero balance
-    # ZERO_IF_UNAUTHORIZED: treat unauthorized MPT holders as having zero balance
-    currentBalances = ammHolds(sb, ammSle, amount, amount2, ZERO_IF_FROZEN, ZERO_IF_UNAUTHORIZED)
+    # FreezeHandling::ZeroIfFrozen: treat frozen assets as having zero balance
+    # AuthHandling::ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
+    currentBalances = ammHolds(sb, ammSle, amount.asset(), amount2.asset(), FreezeHandling::ZeroIfFrozen, AuthHandling::ZeroIfUnauthorized)
     if not currentBalances:
         return (currentBalances.error(), false)
 
@@ -517,11 +518,13 @@ def singleWithdrawTokens(
 
 > "I'll withdraw (single asset), but only if the effective price per LP token is reasonable."
 
-Withdraw a single asset with an effective price constraint.
+Withdraw a single asset with an effective price constraint.[^singleWithdrawEPrice]
 
 This mode allows users to control the effective price when redeeming LP tokens, where effective price is defined as the ratio of LP tokens redeemed to asset withdrawn. The user provides `EPrice` (minimum effective price) and optionally `Amount` (minimum withdrawal amount). Unlike deposits where users set a maximum effective price (to avoid overpaying), withdrawals use a minimum effective price constraint - a lower effective price means a better deal for the withdrawer (fewer LP tokens per asset withdrawn).
 
-The function solves a derived formula from Equation 8 to calculate the LP tokens that achieve exactly the specified effective price. It then calculates the withdrawal amount as `tokensAdj * ePrice`. If the calculated amount is less than the user's optional `Amount` constraint, the transaction fails with `tecAMM_FAILED`.
+The function solves a derived formula from Equation 8 to calculate the LP tokens that achieve exactly the specified effective price. It then calculates the withdrawal amount as `tokensAdj / ePrice`. If the calculated amount is less than the user's optional `Amount` constraint, the transaction fails with `tecAMM_FAILED`.
+
+[^singleWithdrawEPrice]: AMMWithdraw::singleWithdrawEPrice: [AMMWithdraw.cpp](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L1073-L1130)
 
 ### 5.3.1. singleWithdrawEPrice Pseudo-Code
 
@@ -667,6 +670,19 @@ def withdraw(
     if amountWithdrawActual > curBalance or amount2WithdrawActual > curBalance2:
         return (tecAMM_BALANCE, STAmount{}, STAmount{}, STAmount{})
 
+    # With featureMPTokensV2: the post-withdrawal pool state must be consistent
+    # (all balances zero or all non-zero, agreeing with the LP token total)
+    if rules.enabled(featureMPTokensV2):
+        newBalanceZero = (curBalance - amountWithdrawActual) == 0
+        newBalance2Zero = (curBalance2 - amount2WithdrawActual) == 0
+        newLPTokensZero = (lpTokensAMMBalance - lpTokensWithdrawActual) == 0
+        if amount2WithdrawActual is None:
+            valid = (newBalanceZero == newLPTokensZero)
+        else:
+            valid = (newBalanceZero == newBalance2Zero and newBalance2Zero == newLPTokensZero)
+        if not valid:
+            return (tecAMM_BALANCE, STAmount{}, STAmount{}, STAmount{})
+
     # Helper function to check reserve requirements (with fixAMMv1_2)
     # Checks if withdrawer has sufficient XRP reserve for trust line or MPToken creation
     def sufficientReserve(asset):
@@ -700,10 +716,6 @@ def withdraw(
 
             if balanceToCheck < reserve:
                 return (tecINSUFFICIENT_RESERVE, None)
-
-            # For MPTs, increment owner count immediately
-            if not isIOU(asset):
-                adjustOwnerCount(view, sleAccount, 1, journal)
 
         return (tesSUCCESS, mptokenKey)
 
