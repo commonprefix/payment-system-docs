@@ -28,7 +28,7 @@ Think of a trust line as a credit agreement: it defines how much of a particular
 For example, suppose Alice is an issuer and Bob wants to hold USD issued by her. Bob would create a trust line, specifying USD as the currency code and Alice's address as the issuer. 
 Alice can now send USD to Bob. 
 The IOU is identified by currency code `USD` and `Alice's address`. The balance between Alice and Bob is stored on the trust line. 
-If Alice sent 10 USD to Bob, her balance would be -10, while Bob's balance would be 10. Please note that `rippled` implementation may not store the balance as such, but the user will see it that way. 
+If Alice sent 10 USD to Bob, her balance would be -10, while Bob's balance would be 10. Please note that `xrpld` implementation may not store the balance as such, but the user will see it that way. 
 Alice can keep issuing the same IOU to other parties, and her total balance would be the sum of her balance on each of the trust lines.
 
 If Alice's account contains `RequireAuth` flag, then her trust lines have to be authorized. This means that, after Bob creates a trust line, Alice has to authorize it before Bob can receive any IOUs on that trust line. Alice authorizes the trust line by sending a TrustSet transaction with the `tfSetfAuth` flag, specifying Bob's address in the `LimitAmount.issuer` field. Alice may choose to freeze or deep freeze the trust line. She can also clawback IOUs from a trust line.
@@ -289,10 +289,10 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
       - The source account's NoRipple flag (`lsfLowNoRipple` or `lsfHighNoRipple`) is set if the TrustSet transaction contains `tfSetNoRipple` and not `tfClearNoRipple`[^trustcreate-noripple-src].
       - The destination account's NoRipple flag is set if the destination account does **not** have `lsfDefaultRipple` on their account[^trustcreate-noripple-dst]. `lsfDefaultRipple` is an account-level flag set via AccountSet (`asfDefaultRipple`). When an issuer sets `lsfDefaultRipple`, new trust lines are created without NoRipple on the issuer's side, allowing rippling by default.
 
-[^modify-then-delete]: Default state check and deletion after modification: [`TrustSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/TrustSet.cpp#L595-L600)
-[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L281)
-[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L267)
-[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L277-L281)
+[^modify-then-delete]: Default state check and deletion after modification: [`TrustSet.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/TrustSet.cpp#L595-L600)
+[^trustcreate-noripple]: NoRipple initialization in trustCreate: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L281)
+[^trustcreate-noripple-src]: Source account NoRipple from transaction flags: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L264-L267)
+[^trustcreate-noripple-dst]: Destination account NoRipple from lsfDefaultRipple: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L277-L281)
 
 
 - `DirectoryNode` object is **created or modified**:
@@ -309,11 +309,11 @@ to [TrustSet Flags](https://xrpl.org/docs/references/protocol/transactions/types
 
 ### 3.1.2. Clawback Transaction
 
-**Design note** - in `rippled`, the same transactor implementation of `Clawback` is used to clawback
-both [IOUs](../glossary.md#iou) and [MPTs](../glossary.md#mpt). `rippled`'s `Clawback` implementation of
+**Design note** - in `xrpld`, the same transactor implementation of `Clawback` is used to clawback
+both [IOUs](../glossary.md#iou) and [MPTs](../glossary.md#mpt). `xrpld`'s `Clawback` implementation of
 `Transactor` uses an adaptation of a visitor pattern. Any transaction containing an MPT in `Amount` field will visit
 `MPTIssue` implementation, while transactions referring to IOUs in `Amount` field will visit `Issue` implementation.
-This allows for the code to be sufficiently separated that even when describing `rippled` implementation of Clawback we
+This allows for the code to be sufficiently separated that even when describing `xrpld` implementation of Clawback we
 can discuss two implementations separately.
 
 Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/references/protocol/transactions/types/clawback#clawback-fields).

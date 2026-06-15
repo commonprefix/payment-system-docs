@@ -337,7 +337,7 @@ The `AMM` ledger entry (type `ltAMM = 0x0079`)[^amm-ledger-entry] tracks the sta
 
 The key of the `AMM` object is the result of [SHA512-Half](https://xrpl.org/docs/references/protocol/data-types/basic-data-types#hashes) of the `AMM` space key (`0x0041`, uppercase `A`)[^amm-namespace] concatenated with the two assets' identifiers.
 
-[^amm-namespace]: AMM namespace constant: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L73)
+[^amm-namespace]: AMM namespace constant: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L73)
 
 The two assets are first ordered canonically (lexicographically) to ensure a unique, deterministic key regardless of the order in which assets are specified.
 
@@ -398,17 +398,17 @@ The AMM's `Account` field references a pseudo-account[^pseudo-account-creation] 
 - Has MPToken entries for MPT assets in the pool (if pool contains MPTs):
 - Is automatically deleted when the AMM is deleted
 
-[^pseudo-account-creation]: Pseudo-account creation for AMM: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251)
-[^disabled-master-key]: Master key disabled with lsfDisableMaster flag: [`AccountRootHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AccountRootHelpers.cpp#L244)
-[^ammid-field]: AMMID field set in pseudo-account: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251)
-[^pseudo-account-address]: Pseudo-account address generation: [`AccountRootHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AccountRootHelpers.cpp#L146-L160)
-[^zero-credit-limit]: LP token trustline created with zero balance: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L269-L273)
+[^pseudo-account-creation]: Pseudo-account creation for AMM: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251)
+[^disabled-master-key]: Master key disabled with lsfDisableMaster flag: [`AccountRootHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AccountRootHelpers.cpp#L244)
+[^ammid-field]: AMMID field set in pseudo-account: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251)
+[^pseudo-account-address]: Pseudo-account address generation: [`AccountRootHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AccountRootHelpers.cpp#L146-L160)
+[^zero-credit-limit]: LP token trustline created with zero balance: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L269-L273)
 
 #### 2.1.3.1. Account ID Generation
 
 The AMM pseudo-account ID, like any other pseudo-account ID, is generated using a collision-avoidance algorithm[^collision-avoidance-algo] that ensures no existing account has the same address. The generation process uses the `pseudoAccountAddress()` function with the following algorithm:
 
-[^collision-avoidance-algo]: Collision-avoidance algorithm for pseudo-account address: [`AccountRootHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AccountRootHelpers.cpp#L146-L160)
+[^collision-avoidance-algo]: Collision-avoidance algorithm for pseudo-account address: [`AccountRootHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AccountRootHelpers.cpp#L146-L160)
 
 **Generation Process:**
 
@@ -474,8 +474,8 @@ All AMM trust lines:
 Pool asset trust lines (between the AMM account and the IOU issuer):
 - Are additionally marked with the `lsfAMMNode` flag[^ripplestate-amm-flag]
 
-[^ripplestate-amm-flag]: Trust line marked with lsfAMMNode flag: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L339-L341)
-[^ripplestate-no-quality]: Quality modifiers only set if non-zero: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L252-L256)
+[^ripplestate-amm-flag]: Trust line marked with lsfAMMNode flag: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L339-L341)
+[^ripplestate-no-quality]: Quality modifiers only set if non-zero: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L252-L256)
 
 See [Trust Lines Documentation](../trust_lines/README.md#21-ripplestate-ledger-entry) for complete details on `RippleState` ledger entries.
 
@@ -489,10 +489,10 @@ When an AMM pool contains MPT assets, the AMM pseudo-account holds `MPToken` ent
 - Are created when depositing MPT assets[^mptoken-creation]
 - Do not count towards the AMM pseudo-account's `OwnerCount`[^mptoken-no-owner-count]
 
-[^mptoken-amm-flag]: MPToken created with lsfMPTAMM flag: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L311)
-[^mptoken-authorized-flag]: MPToken implicitly authorized (lsfMPTAuthorized set unconditionally): [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L311)
-[^mptoken-creation]: MPToken creation for AMM pseudo-account: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L318)
-[^mptoken-no-owner-count]: AMM owner count not adjusted for MPToken: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L320-L321)
+[^mptoken-amm-flag]: MPToken created with lsfMPTAMM flag: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L311)
+[^mptoken-authorized-flag]: MPToken implicitly authorized (lsfMPTAuthorized set unconditionally): [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L311)
+[^mptoken-creation]: MPToken creation for AMM pseudo-account: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L318)
+[^mptoken-no-owner-count]: AMM owner count not adjusted for MPToken: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L320-L321)
 
 See [MPTokens Documentation](../mpts/README.md) for complete details on `MPToken` ledger entries.
 
@@ -506,8 +506,8 @@ Several AMM transactions (`AMMCreate`, `AMMDeposit`, `AMMWithdraw`, `AMMBid`) us
 - `tecFAILED_PROCESSING` or `telFAILED_PROCESSING`: Sender has insufficient XRP balance to complete the transfer (after paying transaction fees and maintaining reserve requirements)[^xrp-insufficient-balance]
 - With [fixAMMv1_1](https://xrpl.org/resources/known-amendments#fixammv1_1): `tecINTERNAL` if the transfer amount is negative[^xrp-negative-check]
 
-[^xrp-insufficient-balance]: Insufficient XRP balance check: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L886-L892)
-[^xrp-negative-check]: Negative amount check with fixAMMv1_1: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L825-L830)
+[^xrp-insufficient-balance]: Insufficient XRP balance check: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L886-L892)
+[^xrp-negative-check]: Negative amount check with fixAMMv1_1: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L825-L830)
 
 **For IOU transfers:**
 - Calls `directSendNoLimitIOU()`[^iou-ripple-send] which then calls `directSendNoFeeIOU()`[^iou-ripple-credit] and may call `issueIOU()`[^iou-issue] or `redeemIOU()`[^iou-redeem]
@@ -523,17 +523,17 @@ Several AMM transactions (`AMMCreate`, `AMMDeposit`, `AMMWithdraw`, `AMMBid`) us
   - `tecNO_TARGET`: Peer account doesn't exist when creating trust line (from `trustCreate()`)[^iou-no-target]
   - `tefBAD_LEDGER`: Directory removal failed when deleting trust line (from `trustDelete()`)[^iou-bad-ledger]
 
-[^iou-ripple-send]: directSendNoLimitIOU function: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L694-L743)
-[^iou-ripple-credit]: directSendNoFeeIOU function: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L550-L690)
-[^iou-issue]: issueIOU function: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L385-L476)
-[^iou-redeem]: redeemIOU function: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L479-L547)
-[^iou-dir-full]: Owner directory full check: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L218-L227)
-[^iou-insuf-reserve]: Insufficient reserve to create trust line: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L654-L655)
-[^iou-no-line]: Trust line doesn't exist after attempting redeem: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L538-L547)
-[^iou-null-account]: Receiver account SLE null check: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L668-L670), [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L233-L234)
-[^iou-no-target]: Peer account doesn't exist check: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L239-L241)
-[^iou-deletable-accounts]: IOU send error propagation: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L716-L717)
-[^iou-bad-ledger]: Directory removal failure in trustDelete: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L308-L318)
+[^iou-ripple-send]: directSendNoLimitIOU function: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L694-L743)
+[^iou-ripple-credit]: directSendNoFeeIOU function: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L550-L690)
+[^iou-issue]: issueIOU function: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L385-L476)
+[^iou-redeem]: redeemIOU function: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L479-L547)
+[^iou-dir-full]: Owner directory full check: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L218-L227)
+[^iou-insuf-reserve]: Insufficient reserve to create trust line: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L654-L655)
+[^iou-no-line]: Trust line doesn't exist after attempting redeem: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L538-L547)
+[^iou-null-account]: Receiver account SLE null check: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L668-L670), [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L233-L234)
+[^iou-no-target]: Peer account doesn't exist check: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L239-L241)
+[^iou-deletable-accounts]: IOU send error propagation: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L716-L717)
+[^iou-bad-ledger]: Directory removal failure in trustDelete: [`RippleStateHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/RippleStateHelpers.cpp#L308-L318)
 
 **For MPT transfer:**
 - `tecOBJECT_NOT_FOUND`: MPT issuance object doesn't exist[^mpt-object-not-found]
@@ -544,20 +544,20 @@ Several AMM transactions (`AMMCreate`, `AMMDeposit`, `AMMWithdraw`, `AMMBid`) us
   - Receiver's MPToken ledger entry doesn't exist (not authorized to hold the MPT)[^mpt-receiver-no-auth]
 - `tecINTERNAL`: Outstanding amount is less than the amount being redeemed when receiver is issuer[^mpt-internal]
 
-[^mpt-object-not-found]: MPT issuance not found: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1161-L1163)
-[^mpt-path-dry-send]: MPT transfer exceeds MaximumAmount (directSendNoLimitMPT): [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1178-L1179)
-[^mpt-path-dry-credit]: MPT transfer exceeds MaximumAmount (directSendNoFeeMPT): [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1084-L1085)
-[^mpt-insufficient-funds]: Sender MPToken balance insufficient: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1095-L1097)
-[^mpt-sender-no-auth]: Sender MPToken entry missing: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1102-L1104)
-[^mpt-receiver-no-auth]: Receiver MPToken entry missing: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1136-L1138)
-[^mpt-internal]: Outstanding amount less than redemption: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1115-L1117)
-[^amm-ledger-entry]: AMM ledger entry type definition: [`ledger_entries.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L373-L384)
-[^amm-keylet]: AMM keylet computation using asset pair: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L425-L456)
-[^amm-keylet-hash]: AMM keylet hash with namespace `0x0041` and fields `(account, currency)` per asset: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L432-L437)
-[^amm-lp-tokens-calc]: Initial LP token calculation: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L45-L54)
-[^vote-max-slots]: Maximum vote slots constant: [`AMMCore.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/AMMCore.h#L24)
-[^vote-weighted-average]: Weighted average fee calculation: [`AMMVote.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L205-L207)
-[^vote-min-tokens]: Vote slot replacement logic: [`AMMVote.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L135-L144)
+[^mpt-object-not-found]: MPT issuance not found: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1161-L1163)
+[^mpt-path-dry-send]: MPT transfer exceeds MaximumAmount (directSendNoLimitMPT): [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1178-L1179)
+[^mpt-path-dry-credit]: MPT transfer exceeds MaximumAmount (directSendNoFeeMPT): [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1084-L1085)
+[^mpt-insufficient-funds]: Sender MPToken balance insufficient: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1095-L1097)
+[^mpt-sender-no-auth]: Sender MPToken entry missing: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1102-L1104)
+[^mpt-receiver-no-auth]: Receiver MPToken entry missing: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1136-L1138)
+[^mpt-internal]: Outstanding amount less than redemption: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1115-L1117)
+[^amm-ledger-entry]: AMM ledger entry type definition: [`ledger_entries.macro`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L373-L384)
+[^amm-keylet]: AMM keylet computation using asset pair: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L425-L456)
+[^amm-keylet-hash]: AMM keylet hash with namespace `0x0041` and fields `(account, currency)` per asset: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L432-L437)
+[^amm-lp-tokens-calc]: Initial LP token calculation: [`AMMHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L45-L54)
+[^vote-max-slots]: Maximum vote slots constant: [`AMMCore.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/AMMCore.h#L24)
+[^vote-weighted-average]: Weighted average fee calculation: [`AMMVote.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L205-L207)
+[^vote-min-tokens]: Vote slot replacement logic: [`AMMVote.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L135-L144)
 
 **Note:** Most of these error conditions are checked during the `preclaim` phase (validation against the ledger view), so they are unlikely to occur during `doApply`. However, ledger state can change between validation and application (e.g., due to other transactions in the same ledger), making these errors theoretically possible.
 
@@ -580,7 +580,7 @@ The two amounts can be in any order - the AMM will automatically order them as `
 
 **Static validation**[^ammcreate-static-validation]
 
-[^ammcreate-static-validation]: Static validation (preflight): [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L42-L85)
+[^ammcreate-static-validation]: Static validation (preflight): [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L42-L85)
 
 - `temDISABLED`:
     - [AMM](https://xrpl.org/resources/known-amendments#amm) amendment is not enabled
@@ -595,7 +595,7 @@ The two amounts can be in any order - the AMM will automatically order them as `
 
 **Validation against the ledger view**[^ammcreate-preclaim-validation]
 
-[^ammcreate-preclaim-validation]: Validation against ledger view (preclaim): [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L95-L240)
+[^ammcreate-preclaim-validation]: Validation against ledger view (preclaim): [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L95-L240)
 
 - `tecDUPLICATE`: an AMM already exists for this token pair
 - `tecNO_LINE`: `Amount` or `Amount2` issuer has `lsfRequireAuth` flag set, but account has no trust line with the issuer
@@ -618,7 +618,7 @@ The two amounts can be in any order - the AMM will automatically order them as `
 
 **Validation during doApply**[^ammcreate-doapply-validation]
 
-[^ammcreate-doapply-validation]: Validation during doApply: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251-L329)
+[^ammcreate-doapply-validation]: Validation during doApply: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251-L329)
 
 - `tecDUPLICATE`:
   - AMM pseudo-account ID generation failed (no valid account ID found after 256 attempts)
@@ -628,7 +628,7 @@ The two amounts can be in any order - the AMM will automatically order them as `
 
 ### 3.1.2. State Changes[^ammcreate-state-changes]
 
-[^ammcreate-state-changes]: State changes (doApply): [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251-L372)
+[^ammcreate-state-changes]: State changes (doApply): [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L251-L372)
 
 - `AccountRoot` object is **created** for AMM pseudo-account:
     - `Account`: Generated pseudo-account ID (from collision-avoidance algorithm)
@@ -719,7 +719,7 @@ The deposit mode is determined by exactly one of these flags (enforced by checki
 
 **Static validation**[^ammdeposit-static-validation]
 
-[^ammdeposit-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L37-L47), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L51-L54), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L57-L175)
+[^ammdeposit-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L37-L47), [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L51-L54), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L57-L175)
 
 - `temDISABLED`:
     - AMM amendment is not enabled
@@ -742,7 +742,7 @@ The deposit mode is determined by exactly one of these flags (enforced by checki
 
 **Validation against the ledger view**[^ammdeposit-preclaim-validation]
 
-[^ammdeposit-preclaim-validation]: Validation against ledger view (preclaim): [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L178-L380)
+[^ammdeposit-preclaim-validation]: Validation against ledger view (preclaim): [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L178-L380)
 
 - `terNO_AMM`: AMM ledger entry does not exist for specified asset pair
 - `tecINTERNAL`: 
@@ -765,7 +765,7 @@ The deposit mode is determined by exactly one of these flags (enforced by checki
 
 **Validation during doApply**[^ammdeposit-doapply-validation]
 
-[^ammdeposit-doapply-validation]: Validation during doApply: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L383-L1014)
+[^ammdeposit-doapply-validation]: Validation during doApply: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L383-L1014)
 
 - `tecINTERNAL`: AMM ledger entry does not exist (should not happen if preclaim succeeded)
 - `temBAD_AMOUNT`: Deposit amount after adjustment/calculation is zero or negative. Deposit amounts are adjusted based on the deposit mode (e.g., proportional calculations for tfLPToken, pool ratio adjustments for tfTwoAsset, or LP token precision adjustments).
@@ -843,7 +843,7 @@ The withdrawal mode is determined by exactly one of these flags (enforced by che
 
 **Static validation**[^ammwithdraw-static-validation]
 
-[^ammwithdraw-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L43-L53), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L57-L60), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L63-L173)
+[^ammwithdraw-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L43-L53), [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L57-L60), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L63-L173)
 
 - `temDISABLED`:
     - AMM amendment not enabled
@@ -870,7 +870,7 @@ The withdrawal mode is determined by exactly one of these flags (enforced by che
 
 **Validation against the ledger view**[^ammwithdraw-preclaim-validation]
 
-[^ammwithdraw-preclaim-validation]: Validation against ledger view (preclaim): [`AMMWithdraw.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L187-L304)
+[^ammwithdraw-preclaim-validation]: Validation against ledger view (preclaim): [`AMMWithdraw.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L187-L304)
 
 - `terNO_AMM`: AMM ledger entry does not exist for specified asset pair
 - `tecINTERNAL`:
@@ -890,7 +890,7 @@ The withdrawal mode is determined by exactly one of these flags (enforced by che
 
 **Validation during doApply**[^ammwithdraw-doapply-validation]
 
-[^ammwithdraw-doapply-validation]: Validation during doApply: [`AMMWithdraw.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L307-L422)
+[^ammwithdraw-doapply-validation]: Validation during doApply: [`AMMWithdraw.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMWithdraw.cpp#L307-L422)
 
 - With [fixAMMv1_1](https://xrpl.org/resources/known-amendments#fixammv1_1): `tecAMM_INVALID_TOKENS`: LP token balance adjustment failed. When the withdrawer is the only remaining LP, if their LP token balance differs from the AMM's `LPTokenBalance` by more than 0.1%, the withdrawal fails. If the difference is within 0.1%, the AMM's `LPTokenBalance` is adjusted to match the account's balance to allow full withdrawal despite rounding errors.
 - `tecINTERNAL`: AMM ledger entry does not exist (should not happen if preclaim succeeded)
@@ -948,7 +948,7 @@ The `AMMVote` transaction allows LP token holders to vote on the AMM's trading f
 
 **Static validation**[^ammvote-static-validation]
 
-[^ammvote-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L32-L39), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L42-L57)
+[^ammvote-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L32-L39), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L42-L57)
 
 - `temDISABLED`:
     - AMM amendment not enabled
@@ -961,7 +961,7 @@ The `AMMVote` transaction allows LP token holders to vote on the AMM's trading f
 
 **Validation against the ledger view**[^ammvote-preclaim-validation]
 
-[^ammvote-preclaim-validation]: Validation against ledger view (preclaim): [`AMMVote.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L60-L80)
+[^ammvote-preclaim-validation]: Validation against ledger view (preclaim): [`AMMVote.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L60-L80)
 
 - `terNO_AMM`: AMM ledger entry does not exist for specified asset pair
 - `tecAMM_EMPTY`: AMM has zero LP tokens outstanding
@@ -969,7 +969,7 @@ The `AMMVote` transaction allows LP token holders to vote on the AMM's trading f
 
 **Validation during doApply**[^ammvote-doapply-validation]
 
-[^ammvote-doapply-validation]: Validation during doApply: [`AMMVote.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L82-L235)
+[^ammvote-doapply-validation]: Validation during doApply: [`AMMVote.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMVote.cpp#L82-L235)
 
 - `tecINTERNAL`: AMM ledger entry does not exist (should not happen if preclaim succeeded)
 
@@ -1016,7 +1016,7 @@ See [Bidding documentation](bidding.md) for more details.
 
 **Static validation**[^ammbid-static-validation]
 
-[^ammbid-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L38-L48), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L51-L103)
+[^ammbid-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L38-L48), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L51-L103)
 
 - `temDISABLED`:
     - AMM amendment not enabled
@@ -1032,7 +1032,7 @@ See [Bidding documentation](bidding.md) for more details.
 
 **Validation against the ledger view**[^ammbid-preclaim-validation]
 
-[^ammbid-preclaim-validation]: Validation against ledger view (preclaim): [`AMMBid.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L106-L177)
+[^ammbid-preclaim-validation]: Validation against ledger view (preclaim): [`AMMBid.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L106-L177)
 
 - `terNO_AMM`: AMM ledger entry does not exist for specified asset pair
 - `tecAMM_EMPTY`: AMM has zero LP tokens outstanding
@@ -1045,7 +1045,7 @@ See [Bidding documentation](bidding.md) for more details.
 
 **Validation during doApply**[^ammbid-doapply-validation]
 
-[^ammbid-doapply-validation]: Validation during doApply: [`AMMBid.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L180-L363)
+[^ammbid-doapply-validation]: Validation during doApply: [`AMMBid.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMBid.cpp#L180-L363)
 
 - `tecAMM_FAILED`: Computed price exceeds `BidMax`
 - `tecAMM_INVALID_TOKENS`: Pay price exceeds LP token holdings
@@ -1090,7 +1090,7 @@ The `AMMDelete` transaction is used to clean up AMM instances that have been emp
 
 **Static validation**[^ammdelete-static-validation]
 
-[^ammdelete-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDelete.cpp#L23-L30), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDelete.cpp#L33-L36)
+[^ammdelete-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDelete.cpp#L23-L30), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDelete.cpp#L33-L36)
 
 - `temDISABLED`:
     - AMM amendment not enabled
@@ -1099,14 +1099,14 @@ The `AMMDelete` transaction is used to clean up AMM instances that have been emp
 
 **Validation against the ledger view**[^ammdelete-preclaim-validation]
 
-[^ammdelete-preclaim-validation]: Validation against ledger view (preclaim): [`AMMDelete.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDelete.cpp#L39-L53)
+[^ammdelete-preclaim-validation]: Validation against ledger view (preclaim): [`AMMDelete.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDelete.cpp#L39-L53)
 
 - `terNO_AMM`: AMM ledger entry does not exist for specified asset pair
 - `tecAMM_NOT_EMPTY`: AMM has non-zero LP tokens outstanding (AMM must be empty to delete)
 
 **Validation during doApply**[^ammdelete-doapply-validation]
 
-[^ammdelete-doapply-validation]: Validation during doApply: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L713-L766)
+[^ammdelete-doapply-validation]: Validation during doApply: [`AMMHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L713-L766)
 
 - `tecINTERNAL`:
   - AMM ledger entry does not exist (should not happen if preclaim succeeded)
@@ -1241,7 +1241,7 @@ The transaction uses AMM withdrawal logic internally:
 
 **Static validation**[^ammclawback-static-validation]
 
-[^ammclawback-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L43-L53), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L37-L40), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L56-L99)
+[^ammclawback-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L43-L53), [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L37-L40), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L56-L99)
 
 - `temDISABLED`:
     - [AMMClawback](https://xrpl.org/resources/known-amendments#ammclawback) amendment not enabled
@@ -1259,7 +1259,7 @@ The transaction uses AMM withdrawal logic internally:
 
 **Validation against the ledger view**[^ammclawback-preclaim-validation]
 
-[^ammclawback-preclaim-validation]: Validation against ledger view (preclaim): [`AMMClawback.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L102-L154)
+[^ammclawback-preclaim-validation]: Validation against ledger view (preclaim): [`AMMClawback.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L102-L154)
 
 - `terNO_ACCOUNT`: Issuer account or holder account does not exist
 - `terNO_AMM`: AMM pool does not exist for the specified asset pair
@@ -1274,7 +1274,7 @@ The transaction uses AMM withdrawal logic internally:
 
 **Validation during doApply**[^ammclawback-doapply-validation]
 
-[^ammclawback-doapply-validation]: Validation during doApply: [`AMMClawback.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L169-L291)
+[^ammclawback-doapply-validation]: Validation during doApply: [`AMMClawback.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMClawback.cpp#L169-L291)
 
 - `tecINTERNAL`:
     - AMM ledger entry does not exist

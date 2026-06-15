@@ -159,7 +159,7 @@ Where `sequence` is the issuer's sequence number at creation time and `issuer` i
 | `PreviousTxnID`     | UInt256   | Yes      | Transaction hash that most recently modified this entry                                                                 |
 | `PreviousTxnLgrSeq` | UInt32    | Yes      | Ledger sequence of the transaction that most recently modified this entry                                               |
 
-[^outstanding-balance]: [`MPTInvariant.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/MPTInvariant.cpp#L398-L418), [`finalize`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/MPTInvariant.cpp#L454-L470)
+[^outstanding-balance]: [`MPTInvariant.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/MPTInvariant.cpp#L398-L418), [`finalize`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/MPTInvariant.cpp#L454-L470)
 
 **Field constraints**:
 - `TransferFee`: If non-zero, requires `lsfMPTCanTransfer` flag
@@ -225,7 +225,7 @@ Creating an `MPTokenIssuance` always requires one owner reserve. The issuer's `O
 
 The `MPToken` ledger entry (type `ltMPTOKEN = 0x007f`)[^mpt-ledger-layout] tracks an individual holder's balance and settings for a specific MPT issuance.
 
-[^mpt-ledger-layout]: [`ledger_entries.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L409-L417)
+[^mpt-ledger-layout]: [`ledger_entries.macro`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L409-L417)
 
 ### 2.2.1. Object Identifier
 
@@ -239,7 +239,7 @@ concatenated in order:
 
 The `MPTokenIssuance` key is calculated as `SHA512-Half(0x007E, MPTID)` where `0x007E` is the `MPTokenIssuance` space key and `MPTID` is the 192-bit issuance identifier.[^mpt-keylet]
 
-[^mpt-keylet]: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L533-L541)
+[^mpt-keylet]: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L533-L541)
 
 ### 2.2.2. Fields
 
@@ -257,8 +257,8 @@ The `MPTokenIssuance` key is calculated as `SHA512-Half(0x007E, MPTID)` where `0
 - `MPTAmount`: bounded by `kMaxMpTokenAmount` (2^63-1, `0x7FFFFFFFFFFFFFFF`). The issuance-wide `MaximumAmount` (if set) caps the issuance's total `OutstandingAmount` across all holders, not any single holder's balance.[^mpt-supply-cap]
 - `LockedAmount`: only ever populated by MPT escrows. Escrow creation requires `lsfMPTCanEscrow` on the issuance, so a non-zero `LockedAmount` implies the issuance has `lsfMPTCanEscrow` set.[^mpt-locked-escrow]
 
-[^mpt-supply-cap]: [`isMPTOverflow`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L973-L983), [`maxMPTAmount`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L949-L960)
-[^mpt-locked-escrow]: [`EscrowCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/escrow/EscrowCreate.cpp#L279-L281)
+[^mpt-supply-cap]: [`isMPTOverflow`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L973-L983), [`maxMPTAmount`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L949-L960)
+[^mpt-locked-escrow]: [`EscrowCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/escrow/EscrowCreate.cpp#L279-L281)
 
 #### 2.2.2.1. Flags
 
@@ -274,7 +274,7 @@ The `lsfMPTAuthorized` flag is only relevant when the issuance has `lsfMPTRequir
 
 The `lsfMPTAMM` flag is automatically set when an AMM creates an `MPToken` for an MPT in its pool (which requires the MPTokensV2 amendment). The AMM's `MPToken` is created with both `lsfMPTAMM` and `lsfMPTAuthorized`, even when the issuance has `lsfMPTRequireAuth`. AMM pseudo-accounts, like Vault and LoanBroker pseudo-accounts, are implicitly authorized, so `requireAuth` succeeds for them and they can hold a require-auth MPT. This implicit authorization cannot be revoked. An `MPTokenAuthorize` transaction naming an AMM, Vault, or LoanBroker pseudo-account as `Holder` fails with `tecNO_PERMISSION`. See [AMM documentation](../amms/README.md) for AMM pseudo-account behavior.[^mpt-amm-auth]
 
-[^mpt-amm-auth]: [`AMMCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L310-L319), [`requireAuth`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L385-L390), [`MPTokenAuthorize.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L134-L139)
+[^mpt-amm-auth]: [`AMMCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMCreate.cpp#L310-L319), [`requireAuth`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L385-L390), [`MPTokenAuthorize.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L134-L139)
 
 ### 2.2.3. Pseudo-accounts
 
@@ -293,7 +293,7 @@ MPToken reserves are determined by the account's total `OwnerCount`:
 
 The holder's `OwnerCount` is always incremented when an `MPToken` is created and decremented when deleted. This differs from trust lines, which only increment `OwnerCount` when in non-default state. The reserve grace for the first two owned items, however, mirrors trust-line reserve behavior: no incremental reserve is enforced while `OwnerCount` is below 2.[^mpt-reserve]
 
-[^mpt-reserve]: [`MPTokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L193-L204)
+[^mpt-reserve]: [`MPTokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L193-L204)
 
 # 3. Transactions
 
@@ -347,7 +347,7 @@ These flags control whether the corresponding capability flags can be changed af
 
 **Static validation**[^mptissuancecreate-static-validation]
 
-[^mptissuancecreate-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L30-L41), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L44-L48), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L51-L101)
+[^mptissuancecreate-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L30-L41), [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L44-L48), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L51-L101)
 
 - `temDISABLED`: 
   - [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
@@ -367,7 +367,7 @@ These flags control whether the corresponding capability flags can be changed af
 
 **Validation during doApply**[^mptissuancecreate-doapply-validation]
 
-[^mptissuancecreate-doapply-validation]: Validation during doApply (reserve, directory, and internal checks in `create`): [`MPTokenIssuanceCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L104-L172)
+[^mptissuancecreate-doapply-validation]: Validation during doApply (reserve, directory, and internal checks in `create`): [`MPTokenIssuanceCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceCreate.cpp#L104-L172)
 
 - `tecINSUFFICIENT_RESERVE`: the account's pre-fee balance is below the reserve required for one additional owned object (base reserve plus per-owner increments)
 - `tecDIR_FULL`: Owner directory is full and cannot accommodate the new issuance
@@ -410,14 +410,14 @@ The `MPTokenIssuanceDestroy` transaction deletes an MPT issuance. This can only 
 
 **Static validation**[^mptissuancedestroy-static-validation]
 
-[^mptissuancedestroy-static-validation]: Static validation (generic preflight gate): [`invokePreflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/Transactor.h#L460-L470)
+[^mptissuancedestroy-static-validation]: Static validation (generic preflight gate): [`invokePreflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/Transactor.h#L460-L470)
 
 - `temDISABLED`: [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
 - `temINVALID_FLAG`: Any non-universal flags specified
 
 **Validation against the ledger view**[^mptissuancedestroy-preclaim-validation]
 
-[^mptissuancedestroy-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenIssuanceDestroy.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L23-L42)
+[^mptissuancedestroy-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenIssuanceDestroy.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L23-L42)
 
 - `tecOBJECT_NOT_FOUND`: `MPTokenIssuance` with specified MPTID does not exist
 - `tecNO_PERMISSION`: Signing account is not the issuer
@@ -429,7 +429,7 @@ The `LockedAmount` check is a defensive guard: escrow-locked tokens remain count
 
 **Validation during doApply**[^mptissuancedestroy-doapply-validation]
 
-[^mptissuancedestroy-doapply-validation]: Validation during doApply: [`MPTokenIssuanceDestroy.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L45-L59)
+[^mptissuancedestroy-doapply-validation]: Validation during doApply: [`MPTokenIssuanceDestroy.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceDestroy.cpp#L45-L59)
 
 - `tecINTERNAL`: Signing account is not the issuer
 - `tefBAD_LEDGER`: Failed to remove issuance from owner directory (indicates ledger corruption)
@@ -507,7 +507,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 **Static validation**[^mptissuanceset-static-validation]
 
-[^mptissuanceset-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L32-L37), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L40-L43), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L76-L140)
+[^mptissuanceset-static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L32-L37), [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L40-L43), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L76-L140)
 
 - `temDISABLED`:
   - [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
@@ -530,7 +530,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 **Validation against the ledger view**[^mptissuanceset-preclaim-validation]
 
-[^mptissuanceset-preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L143-L173), [`preclaim`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L176-L265)
+[^mptissuanceset-preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L143-L173), [`preclaim`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L176-L265)
 
 - `terNO_ACCOUNT`: Signing account does not exist (enforced by the base transactor, before `MPTokenIssuanceSet` preclaim)
 - `tecOBJECT_NOT_FOUND`:
@@ -550,7 +550,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
 
 **Validation during doApply**[^mptissuanceset-doapply-validation]
 
-[^mptissuanceset-doapply-validation]: Validation during doApply: [`MPTokenIssuanceSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L268-L373)
+[^mptissuanceset-doapply-validation]: Validation during doApply: [`MPTokenIssuanceSet.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L268-L373)
 
 - `tecINTERNAL`: `MPTokenIssuance` does not exist
 
@@ -568,7 +568,7 @@ These flags are used in the `MutableFlags` field to set or clear capability flag
   - If `MutableFlags` present with set flags: Set corresponding capability flags (e.g., `tmfMPTSetCanTrade` sets `lsfMPTCanTrade`)
   - If `MutableFlags` present with clear flags: Clear corresponding capability flags (e.g., `tmfMPTClearCanTrade` clears `lsfMPTCanTrade`). Clearing `lsfMPTCanTransfer` via `tmfMPTClearCanTransfer` also clears the `TransferFee` field.[^clear-cantransfer-clears-transferfee]
 
-[^clear-cantransfer-clears-transferfee]: Clearing `lsfMPTCanTransfer` clears `TransferFee`: [`MPTokenIssuanceSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L313-L318)
+[^clear-cantransfer-clears-transferfee]: Clearing `lsfMPTCanTransfer` clears `TransferFee`: [`MPTokenIssuanceSet.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp#L313-L318)
 
 **When `Holder` is specified** (modifying `MPToken`):
 
@@ -617,7 +617,7 @@ Issuer-initiated authorize/unauthorize only applies when the issuance has `lsfMP
 
 **Static validation**[^mptokenauthorize-static-validation]
 
-[^mptokenauthorize-static-validation]: Static validation (preflight): [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L23-L26), [`preflight`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L29-L35)
+[^mptokenauthorize-static-validation]: Static validation (preflight): [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L23-L26), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L29-L35)
 
 - `temDISABLED`: [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled
 - `temINVALID_FLAG`: Invalid flags specified
@@ -625,7 +625,7 @@ Issuer-initiated authorize/unauthorize only applies when the issuance has `lsfMP
 
 **Validation against the ledger view**[^mptokenauthorize-preclaim-validation]
 
-[^mptokenauthorize-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenAuthorize.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L37-L142)
+[^mptokenauthorize-preclaim-validation]: Validation against ledger view (preclaim): [`MPTokenAuthorize.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/MPTokenAuthorize.cpp#L37-L142)
 
 **When Holder NOT specified (holder-initiated)**:
 
@@ -654,7 +654,7 @@ Issuer-initiated authorize/unauthorize only applies when the issuance has `lsfMP
 
 **Validation during doApply**[^mptokenauthorize-doapply-validation]
 
-[^mptokenauthorize-doapply-validation]: Validation during doApply: [`MPTokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L148-L268)
+[^mptokenauthorize-doapply-validation]: Validation during doApply: [`MPTokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L148-L268)
 
 - `tecINTERNAL`: Signing account does not exist
 
@@ -729,7 +729,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
 - `temBAD_AMOUNT`:
   - `Amount` is zero, negative, or greater than the maximum MPT amount (`kMaxMpTokenAmount` = `0x7FFFFFFFFFFFFFFF`)
 
-[^clawback-static-validation]: Static validation (preflight): [`preflightHelper<MPTIssue>`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L56-L76)
+[^clawback-static-validation]: Static validation (preflight): [`preflightHelper<MPTIssue>`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L56-L76)
 
 **Validation against the ledger view:**[^clawback-preclaim-validation]
 
@@ -744,7 +744,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
   - Issuance does not have `lsfMPTCanClawback` flag
 - `tecINSUFFICIENT_FUNDS`: Holder's `MPTAmount` is zero (nothing to claw back)
 
-[^clawback-preclaim-validation]: Validation against the ledger view (preclaim): [`preclaim`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L184-L211), [`preclaimHelper<MPTIssue>`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L150-L182)
+[^clawback-preclaim-validation]: Validation against the ledger view (preclaim): [`preclaim`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L184-L211), [`preclaimHelper<MPTIssue>`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L150-L182)
 
 ### 3.5.2. State Changes
 
@@ -756,7 +756,7 @@ Transaction fields are described in [Clawback Fields](https://xrpl.org/docs/refe
 
 The holder's `MPToken` is **not** deleted by clawback, even when its `MPTAmount` reaches zero, and the holder's `OwnerCount` is unchanged. (This differs from trust-line clawback.)
 
-[^clawback-doapply]: State changes during doApply: [`applyHelper<MPTIssue>`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L243-L267)
+[^clawback-doapply]: State changes during doApply: [`applyHelper<MPTIssue>`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/token/Clawback.cpp#L243-L267)
 
 **Notes**:
 - The clawed back amount is removed from circulation (burned), not transferred to the issuer's balance. If the requested clawback amount exceeds the holder's balance, only the available balance is clawed back (no error).
@@ -773,7 +773,7 @@ These checks cover *tradability* and *transferability* only. Two related concern
 
 `canTrade(view, asset)`: checks whether an asset may be traded on the DEX.[^mpt-cantrade]
 
-[^mpt-cantrade]: [`canTrade`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L581-L619)
+[^mpt-cantrade]: [`canTrade`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L581-L619)
 
 **Used by**: OfferCreate (`OfferCreate::preclaim`) and cross-currency payment book steps (`BookStep`, `MPTEndpointStep`). AMM transactions reach it indirectly via `canMPTTradeAndTransfer`.
 
@@ -794,7 +794,7 @@ These checks cover *tradability* and *transferability* only. Two related concern
 
 `canTransfer(view, mptIssue, from, to, waive = No)` checks whether `to` may receive the MPT from `from`.[^mpt-cantransfer]
 
-[^mpt-cantransfer]: [`canTransfer`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L524-L579)
+[^mpt-cantransfer]: [`canTransfer`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L524-L579)
 
 **Used by**: holder-to-holder MPT payments (`MPTEndpointStep`, `Payment`), `CheckCash`/`CheckCreate`, `EscrowCreate`, Vault and Lending transactions, and offer-owner validation in `BookStep`.
 
@@ -814,7 +814,7 @@ Otherwise returns `tecNO_AUTH`. Vault shares recurse into the underlying asset's
 
 `canMPTTradeAndTransfer(view, asset, from, to)`: convenience wrapper that runs `canTrade` then `canTransfer`, returning the first failure (or `tesSUCCESS` immediately for non-MPT assets).[^mpt-canmpttradetransfer]
 
-[^mpt-canmpttradetransfer]: [`canMPTTradeAndTransfer`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L621-L635)
+[^mpt-canmpttradetransfer]: [`canMPTTradeAndTransfer`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L621-L635)
 
 **Used by**: AMM transactions (`AMMCreate`, `AMMDeposit`, `AMMWithdraw`), which require both DEX tradability and transferability.
 
@@ -857,7 +857,7 @@ sequenceDiagram
 
 Minting fails with `tecPATH_DRY` if it would push `OutstandingAmount` above the issuance's `MaximumAmount` (which defaults to `kMaxMpTokenAmount` when unset).[^mpt-mint-cap]
 
-[^mpt-mint-cap]: [`directSendNoFeeMPT`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1076-L1087)
+[^mpt-mint-cap]: [`directSendNoFeeMPT`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L1076-L1087)
 
 ### 4.1.2. Holder Burning (Holder -> Issuer)
 
@@ -926,11 +926,11 @@ Under the `fixCleanup3_2_0` amendment, every transaction is checked at preflight
 
 A `ValidAmounts` transaction invariant provides defense in depth: it rejects any ledger entry left with a non-canonical MPT (or XRP) amount after a transaction applies.[^mpt-validamounts]
 
-[^mpt-canonical]: [`preflightUniversal`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/Transactor.cpp#L260-L265), [`isLegalMPT`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L603-L614)
-[^mpt-validamounts]: [`InvariantCheck.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/InvariantCheck.cpp#L1083-L1110)
+[^mpt-canonical]: [`preflightUniversal`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/Transactor.cpp#L260-L265), [`isLegalMPT`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L603-L614)
+[^mpt-validamounts]: [`InvariantCheck.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/InvariantCheck.cpp#L1083-L1110)
 
 ## 4.3. Locks under the Flow Path
 
 When MPTokensV2 is enabled, MPT payments run through the Flow engine and lock/freeze is enforced per Flow step in `MPTEndpointStep`. A global lock (`lsfMPTLocked` on the `MPTokenIssuance`) is checked on the first step, and an individual lock (`lsfMPTLocked` on a holder's `MPToken`) on each step; a locked step returns `terLOCKED`. A pure issuer-side transfer (minting or burning) is a single Flow step (both first and last) and is exempt from the freeze check, so it succeeds even when the MPT is globally locked.[^mpt-flow-lock]
 
-[^mpt-flow-lock]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L843-L856)
+[^mpt-flow-lock]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L843-L856)

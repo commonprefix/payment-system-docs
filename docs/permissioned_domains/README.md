@@ -39,7 +39,7 @@ For example, a securities exchange creates a PermissionedDomain requiring "accre
 
 The domain owner always has access to their own domain. All other participants must hold valid credentials. Credentials can be revoked (via expiration or deletion), automatically removing access without the domain owner's involvement.
 
-[^amm-no-domain]: AMM pools are not consulted when a book has a domain: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L820-L822)
+[^amm-no-domain]: AMM pools are not consulted when a book has a domain: [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L820-L822)
 
 ## 1.1. Terminology and Concepts
 
@@ -67,7 +67,7 @@ The domain owner always has access to their own domain. All other participants m
 
 The domain ID is computed at creation using the owner's account and the sequence number consumed by the creating transaction. This can be `Sequence`, or its `TicketSequence` when submitted via a Ticket[^pd-seq].
 
-[^pd-seq]: Domain ID and the stored `Sequence` use the transaction's effective sequence (ticket-aware) under the `fixCleanup3_1_3` amendment: [`PermissionedDomainSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/permissioned_domain/PermissionedDomainSet.cpp#L113-L115)
+[^pd-seq]: Domain ID and the stored `Sequence` use the transaction's effective sequence (ticket-aware) under the `fixCleanup3_1_3` amendment: [`PermissionedDomainSet.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/permissioned_domain/PermissionedDomainSet.cpp#L113-L115)
 
 ### 2.1.2. Fields
 
@@ -120,7 +120,7 @@ When present on an Offer ledger entry, this field indicates the offer exists in 
 
 Under the `fixCleanup3_2_0` amendment, when a hybrid offer partially crosses on placement, the open-book `BookDirectory` listed here is keyed by the offer's original placement rate, so it shares the same quality (`ExchangeRate`) as the primary domain `BookDirectory`. Before the amendment the open-book directory was keyed from the post-crossing amounts and could differ slightly due to rounding.[^pd-hybrid-rate]
 
-[^pd-hybrid-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
+[^pd-hybrid-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
 
 # 3. Transactions
 
@@ -247,7 +247,7 @@ Function: accountInDomain(view, account, domainID)
 
 **Expiration Check**: Credential expiration is compared against the ledger's `parentCloseTime`. Expired credentials are treated as if they don't exist for domain access purposes. During transaction apply, an expired credential encountered while verifying domain membership is also deleted to reclaim its reserve; under the `fixCleanup3_1_3` amendment, if that deletion fails the transaction halts and returns the propagated error (e.g. `tecINTERNAL`) instead of continuing the membership check.[^pd-expiry-delete]
 
-[^pd-expiry-delete]: [`removeExpired`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65), [`verifyValidDomain`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L332-L334)
+[^pd-expiry-delete]: [`removeExpired`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65), [`verifyValidDomain`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L332-L334)
 
 **Performance**: Verification iterates through the domain's AcceptedCredentials array (max 10 entries), performing one ledger lookup per credential until a valid match is found.
 

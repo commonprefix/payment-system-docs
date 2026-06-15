@@ -46,7 +46,7 @@ The actual pay price is then determined by reconciling the computed price with t
 
 ## 1.2. Implementation
 
-In the `rippled` C++ implementation (`AMMBid.cpp`), the main transaction handler calls the [`applyBid`](#2-applybid) function with the transaction context, sandbox view, and bidder account. This function retrieves the AMM ledger entry and the bidder's LP token holdings, then calculates the [minimum slot price](#61-minimum-slot-price) and discounted fee based on the AMM's trading fee and total LP token supply.
+In the `xrpld` C++ implementation (`AMMBid.cpp`), the main transaction handler calls the [`applyBid`](#2-applybid) function with the transaction context, sandbox view, and bidder account. This function retrieves the AMM ledger entry and the bidder's LP token holdings, then calculates the [minimum slot price](#61-minimum-slot-price) and discounted fee based on the AMM's trading fee and total LP token supply.
 
 The function calls [`ammAuctionTimeSlot`](#63-time-slot-calculation) to determine the current time interval (0-19) based on elapsed time since the slot was won. It then defines three lambda functions inline: [`validOwner`](#4-validowner) (checks if the current slot owner is valid and not in the expiring interval), [`updateSlot`](#3-updateslot) (updates auction slot fields and burns LP tokens), and [`getPayPrice`](#5-getpayprice) (determines the actual price to pay given the computed price and bid constraints).
 

@@ -24,7 +24,7 @@
 
 # 1. Introduction
 
-The AMMDeposit transaction allows liquidity providers to add assets to an AMM pool in exchange for LP tokens. This document provides technical implementation details for the deposit logic in `rippled`.
+The AMMDeposit transaction allows liquidity providers to add assets to an AMM pool in exchange for LP tokens. This document provides technical implementation details for the deposit logic in `xrpld`.
 
 The [AMM documentation](README.md#32-ammdeposit-transaction) describes the high-level business logic of deposits, including the six different [deposit modes](README.md#321-deposit-modes), their purposes, and user-facing behavior. This document focuses on the implementation: how the code validates constraints, calculates token amounts, and executes asset transfers.
 
@@ -39,7 +39,7 @@ The `applyGuts` function[^apply-guts] is the main entry point for processing AMM
 
 It retrieves the AMM ledger entry and current pool balances, then determines which trading fee applies to the depositor (regular or discounted for [auction slot holders](#3-gettradingfee)). Based on the transaction flags and provided fields, it dispatches to one of deposit mode handlers: three [multi-asset modes](#4-multi-asset-deposit-modes) that maintain proportional deposits or reinitialize empty pools, and three [single-asset modes](#5-single-asset-deposit-modes) that perform single-sided deposits. Each mode handler calculates the deposit amounts and LP tokens to issue, then calls the [common deposit function](#6-common-deposit-function) to execute the actual asset transfers and update the pool state.
 
-[^apply-guts]: `AMMDeposit::applyGuts`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L383-L484) 
+[^apply-guts]: `AMMDeposit::applyGuts`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L383-L484) 
 
 ## 2.1. applyGuts Pseudo-Code
 
@@ -54,7 +54,7 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
 
     ammAccountId = ammSle[sfAccount]
 
-    # In `rippled`, this is called "expected", but probably only to reflect the returned type. A better name is "existing" or "currentBalances"
+    # In `xrpld`, this is called "expected", but probably only to reflect the returned type. A better name is "existing" or "currentBalances"
     # FreezeHandling::ZeroIfFrozen: treat frozen assets as having zero balance
     # AuthHandling::ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
     currentBalances = ammHolds(sb, ammSle, amount, amount2, FreezeHandling::ZeroIfFrozen, AuthHandling::ZeroIfUnauthorized)
@@ -188,7 +188,7 @@ The `getTradingFee` function[^get-trading-fee] is called by [`applyGuts`](#2-app
 
 It checks if the depositor holds the [auction slot](README.md#121-auction-slot) or is listed in the slot's authorized accounts and if the auction slot has not expired. If so, it returns the discounted fee (1/10th of the regular fee). Otherwise, it returns the AMM's standard trading fee.
 
-[^get-trading-fee]: `getTradingFee`: [`AMMHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L566-L593)  
+[^get-trading-fee]: `getTradingFee`: [`AMMHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/AMMHelpers.cpp#L566-L593)  
 
 ## 3.1. getTradingFee Pseudo-Code
 
@@ -236,7 +236,7 @@ The three modes are:
 
 The `equalDepositLimit` function[^equal-deposit-limit] handles proportional deposits where the depositor specifies maximum amounts they're willing to provide for both assets (`Amount` and `Amount2`). Since the deposit must maintain the pool's ratio, the function cannot simply use both maximum amounts - one will typically be limiting while the other has excess.
 
-[^equal-deposit-limit]: `AMMDeposit::equalDepositLimit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L710-L780)
+[^equal-deposit-limit]: `AMMDeposit::equalDepositLimit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L710-L780)
 
 The function tries two strategies to maximize the deposit within the user's constraints. First, it attempts to use all of `Amount` by calculating the pool fraction this represents (`frac = Amount / amountBalance`), converting this to LP tokens with proper rounding, then recalculating the fraction from the rounded LP tokens (`frac = tokensAdj / lptAMMBalance`) to ensure precision consistency. Using this adjusted fraction, it calculates the proportional amount2 needed. If this amount2 fits within `Amount2`, the deposit proceeds immediately. 
 
@@ -343,7 +343,7 @@ def equalDepositLimit(
 
 Proportional deposit for exact LP tokens.[^equal-deposit-tokens]
 
-[^equal-deposit-tokens]: `AMMDeposit::equalDepositTokens`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L637-L679)
+[^equal-deposit-tokens]: `AMMDeposit::equalDepositTokens`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L637-L679)
 
 This function handles the reverse calculation from [`equalDepositLimit`](#41-equaldepositlimit-tftwoasset): the user specifies the exact number of LP tokens they want to receive, and the function calculates the required proportional amounts of both assets. The user provides `LPTokenOut` (exact LP tokens desired) and optionally `Amount` and `Amount2` as minimum constraints on the deposit amounts. The function first adjusts the requested LP tokens for precision using [`adjustLPTokensOut`](helpers.md#24-adjustlptokensout-deposits), then calculates the pool fraction these tokens represent (`frac = tokensAdj / lptAMMBalance`). Using this fraction, it calculates the required amounts of both assets by multiplying each pool balance by the fraction, rounding up with [`getRoundedAsset`](helpers.md#23-getroundedasset) to ensure the pool receives sufficient assets. If the calculated deposit amounts are less than the optional `Amount` and `Amount2` minimums, the transaction fails with `tecAMM_FAILED`.
 
@@ -405,7 +405,7 @@ def equalDepositTokens(
 
 Reinitialize an empty AMM pool.[^equal-deposit-in-empty-state]
 
-[^equal-deposit-in-empty-state]: `AMMDeposit::equalDepositInEmptyState`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L994-L1014)
+[^equal-deposit-in-empty-state]: `AMMDeposit::equalDepositInEmptyState`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L994-L1014)
 
 This is a special mode that handles the case where all LP tokens have been withdrawn from an AMM, which means both asset balances are also zero (enforced by the [withdrawal system](README.md#13-ammwithdraw)). The depositor specifies both `Amount` and `Amount2` to set a new pool ratio, similar to [`AMMCreate`](README.md#11-ammcreate). The function calculates initial LP tokens using the geometric mean formula (`sqrt(amount * amount2)`), the same formula used when creating a new AMM. The depositor can optionally provide `TradingFee` to set a new fee for the pool. Unlike other deposit modes, there are no minimum constraints since the depositor is establishing the initial terms for the reinitialized pool.
 
@@ -455,7 +455,7 @@ Single-asset deposits allow users to deposit only one asset instead of both asse
 
 Deposit a single asset to receive calculated LP tokens.[^single-deposit]
 
-[^single-deposit]: `AMMDeposit::singleDeposit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L791-L828)
+[^single-deposit]: `AMMDeposit::singleDeposit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L791-L828)
 
 The user specifies `Amount` (the asset to deposit) and the function calculates how many LP tokens they receive. Since this is a single-asset deposit that changes the pool ratio, a [trading fee](#3-gettradingfee) applies. The function uses [`lpTokensOut`](helpers.md#321-lptokensout-equation-3) to calculate the LP tokens based on the deposit amount and trading fee, then adjusts the result for precision with [`adjustLPTokensOut`](helpers.md#24-adjustlptokensout-deposits). The adjusted tokens are passed to [`adjustAssetInByTokens`](helpers.md#26-adjustassetinbytokens) to recalculate the deposit amount, ensuring the reverse calculation doesn't exceed the user's specified amount due to rounding. The optional `LPTokenOut` field provides a minimum constraint - if the calculated LP tokens are less than this value, the transaction fails with `tecAMM_FAILED`.
 
@@ -508,7 +508,7 @@ def singleDeposit(
 
 Deposit a single asset to receive exact LP tokens.[^single-deposit-tokens]
 
-[^single-deposit-tokens]: `AMMDeposit::singleDepositTokens`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L838-L866)
+[^single-deposit-tokens]: `AMMDeposit::singleDepositTokens`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L838-L866)
 
 This function handles the reverse calculation from [`singleDeposit`](#51-singledeposit-tfsingleasset): the user specifies the exact number of LP tokens they want to receive using `LPTokenOut`, and the function calculates the required deposit amount of a single asset. The user provides `Amount` as a maximum constraint on how much they're willing to deposit. The function first adjusts the requested LP tokens for precision using [`adjustLPTokensOut`](helpers.md#24-adjustlptokensout-deposits), then uses [`ammAssetIn`](helpers.md#322-ammassetin-equation-4) (Equation 4) to calculate the required deposit amount by solving the inverse single-asset deposit problem. If the calculated amount exceeds the user's `Amount` constraint, the transaction fails with `tecAMM_FAILED`.
 
@@ -559,7 +559,7 @@ def singleDepositTokens(
 
 Deposit a single asset with an effective price limit.[^single-deposit-eprice]
 
-[^single-deposit-eprice]: `AMMDeposit::singleDepositEPrice`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L894-L991)
+[^single-deposit-eprice]: `AMMDeposit::singleDepositEPrice`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L894-L991)
 
 This mode allows users to control the maximum [effective price](README.md#114-effective-price) they're willing to pay per LP token (effective price = asset deposited / LP tokens received). The user provides `EPrice` (maximum effective price) and `Amount` (deposit amount, or zero). 
 
@@ -706,7 +706,7 @@ def singleDepositEPrice(
 
 The `deposit()` function[^deposit] is called by all deposit modes to perform the actual asset transfers. This function validates minimum constraints for slippage protection, checks the depositor has sufficient funds for the deposit, transfers the assets from the depositor to the AMM account, and issues LP tokens to the depositor (creating a trust line if needed).
 
-[^deposit]: `AMMDeposit::deposit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L501-L620)
+[^deposit]: `AMMDeposit::deposit`: [`AMMDeposit.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/AMMDeposit.cpp#L501-L620)
 
 ## 6.1. deposit Pseudo-Code
 

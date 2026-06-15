@@ -42,7 +42,7 @@ As part of the decentralized exchange, users can submit offers between any combi
 
 The DEX supports both open order books (accessible to all accounts) and domain-specific order books (restricted to credential holders). During offer crossing and payments, domain offers only match within their domain, while hybrid offers can match in both environments. This Permissioned DEX functionality enables regulated trading for securities, institutional venues, and other scenarios requiring verified participants. See [PermissionedDomains documentation](../permissioned_domains/README.md) and [Domain and Hybrid Offers](#15-permissioned-dex) for details.
 
-When `rippled` applies an `OfferCreate`, it first invokes the payment [flow engine](../flow/README.md) to try crossing with existing book depth; only any leftover remainder is placed as a resting order.
+When `xrpld` applies an `OfferCreate`, it first invokes the payment [flow engine](../flow/README.md) to try crossing with existing book depth; only any leftover remainder is placed as a resting order.
 
 ## 1.1. Offers
 
@@ -109,7 +109,7 @@ When the offer will not be placed (a `tfFillOrKill` offer that cannot fully cros
 
 An offer with the `tfSell` flag set is a **sell** offer. An offer without the `tfSell` flag is a **buy** offer.
 
-When selling, the offer will accept more than the specified `takerPays` amount to maximize the sale of `takerGets`. In the `rippled` implementation, `takerPays` is capped at `STAmount::kMaxNative` for XRP[^cMaxNative], half the maximum representable IOU value (`STAmount::kMaxValue / 2`) for IOUs[^cMaxValue-iou], and half the maximum MPT amount (`kMaxMpTokenAmount / 2`) for MPTs[^maxMPTokenAmount-mpt]. The IOU and MPT amounts are halved to leave room for the transfer fee charged during crossing: an issuer's transfer rate can be as high as 200% (a 2.0 multiplier), so capping at half the maximum keeps the crossed amount representable.[^transfer-rate-max] XRP has no transfer rate, so its cap is not halved.
+When selling, the offer will accept more than the specified `takerPays` amount to maximize the sale of `takerGets`. In the `xrpld` implementation, `takerPays` is capped at `STAmount::kMaxNative` for XRP[^cMaxNative], half the maximum representable IOU value (`STAmount::kMaxValue / 2`) for IOUs[^cMaxValue-iou], and half the maximum MPT amount (`kMaxMpTokenAmount / 2`) for MPTs[^maxMPTokenAmount-mpt]. The IOU and MPT amounts are halved to leave room for the transfer fee charged during crossing: an issuer's transfer rate can be as high as 200% (a 2.0 multiplier), so capping at half the maximum keeps the crossed amount representable.[^transfer-rate-max] XRP has no transfer rate, so its cap is not halved.
 
 The following examples demonstrate offer crossing behavior when a new offer is created and crosses with existing offers in the order book.
 
@@ -152,10 +152,10 @@ Alice is willing to buy 100 XRP for her 20 USD. Bob is willing to sell his 100 X
 - Alice will get 100 XRP and pay 20 USD. This is the exchange rate that she offered.
 - Bob will get 20 USD and pay 100 XRP. Because he was selling all of his 100 XRP, he got 20 USD for it. He sold his XRP for a better exchange rate than he hoped for.
 
-[^cMaxNative]: XRP maximum native value: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
-[^cMaxValue-iou]: IOU maximum value halved for transfer rate: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L436-L437)
-[^maxMPTokenAmount-mpt]: MPT maximum amount halved for transfer rate: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L440), maximum defined in [`Protocol.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L234)
-[^transfer-rate-max]: IOU transfer rate capped at 2.0 (200%): [`AccountSet.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/account/AccountSet.cpp#L128-L131)
+[^cMaxNative]: XRP maximum native value: [`STAmount.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
+[^cMaxValue-iou]: IOU maximum value halved for transfer rate: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L436-L437)
+[^maxMPTokenAmount-mpt]: MPT maximum amount halved for transfer rate: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L440), maximum defined in [`Protocol.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L234)
+[^transfer-rate-max]: IOU transfer rate capped at 2.0 (200%): [`AccountSet.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/account/AccountSet.cpp#L128-L131)
 
 ### 1.2.2. Auto-bridging
 
@@ -167,8 +167,8 @@ Auto-bridging is used only when both `takerPays` and `takerGets` are non-XRP cur
 
 The Flow engine evaluates both paths and selects the one(s) providing the best quality, allowing offers to execute through whichever route offers better pricing.
 
-[^auto-bridging-path]: Auto-bridging path construction: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L410-L412)
-[^passive-threshold]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L394-L397)
+[^auto-bridging-path]: Auto-bridging path construction: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L410-L412)
+[^passive-threshold]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L394-L397)
 
 ### 1.2.3. Creating the Residual Offer
 
@@ -196,10 +196,10 @@ Both calculations preserve the original offer's quality, the `takerGets : takerP
 - If the offer is not filled at all, the original offer is recorded on the ledger, unless it is an ImmediateOrCancel or FillOrKill offer (which are never placed) or the account lacks the reserve for a new offer[^offer-reserve]
 - If, after partial filling, the signing account no longer has a positive balance in the `takerGets` currency, the remaining offer is not created[^no-balance-no-offer]. This check is skipped when `takerGets` is an MPT and the creator is its issuer (an issuer can supply the MPT without holding a balance), so the residual offer is still created in that case
 
-[^buy-offer-residual]: Buy offer residual calculation: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L527-L533)
-[^sell-offer-residual]: Sell offer residual calculation: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L501-L520)
-[^no-balance-no-offer]: No balance check after crossing: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L480-L486)
-[^offer-reserve]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L834-L844)
+[^buy-offer-residual]: Buy offer residual calculation: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L527-L533)
+[^sell-offer-residual]: Sell offer residual calculation: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L501-L520)
+[^no-balance-no-offer]: No balance check after crossing: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L480-L486)
+[^offer-reserve]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L834-L844)
 
 ## 1.3. Rate Calculation
 
@@ -211,16 +211,16 @@ Different asset types have different internal representations:
 - **IOU**: a sign, an exponent (`-96` to `80`), and a mantissa. When non-zero, the mantissa is normalized to the range 10^15 to 10^16-1, always 16 significant decimal digits (a 54-bit value). This fixed-precision mantissa combined with a wide exponent lets an IOU represent both very large and very small amounts at 16 digits of precision.[^repr-iou]
 - **MPT**: an unsigned integer, up to `kMaxMpTokenAmount` (2^63 - 1).[^repr-mpt]
 
-`rippled` implementation normalizes the rate by packing the result into a 64-bit integer[^rate-packing]:
+`xrpld` implementation normalizes the rate by packing the result into a 64-bit integer[^rate-packing]:
 - Upper 8 bits: exponent + 100
 - Lower 56 bits: mantissa
 
 `getRate` returns the rate `0` (and the offer is not stored) in three cases: when `takerGets` is zero, when the computed rate rounds to zero (the offer is 'too good' to represent), or when the computation overflows.
 
-[^repr-xrp]: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
-[^repr-iou]: [`STAmount.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L47-L53)
-[^repr-mpt]: [`Protocol.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L234)
-[^rate-packing]: [`STAmount.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/STAmount.cpp#L459-L481)
+[^repr-xrp]: [`STAmount.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L55)
+[^repr-iou]: [`STAmount.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/STAmount.h#L47-L53)
+[^repr-mpt]: [`Protocol.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Protocol.h#L234)
+[^rate-packing]: [`STAmount.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/STAmount.cpp#L459-L481)
 
 ### 1.3.1. TickSize Rounding
 
@@ -233,9 +233,9 @@ After the rate is rounded, one side of the offer is recomputed from the rounded 
 - For **sell offers** (`tfSell` flag): `takerPays` is recalculated based on the rounded rate, unless `takerPays` is an MPT
 - For **buy offers** (no `tfSell` flag): `takerGets` is recalculated based on the rounded rate, unless `takerGets` is an MPT
 
-[^ticksize-range]: [`Quality.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Quality.h#L97-L98)
-[^ticksize-round]: [`Quality.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Quality.cpp#L134-L162)
-[^ticksize-integral]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L668-L700)
+[^ticksize-range]: [`Quality.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Quality.h#L97-L98)
+[^ticksize-round]: [`Quality.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Quality.cpp#L134-L162)
+[^ticksize-integral]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L668-L700)
 
 ## 1.4. Offer deletion
 
@@ -265,8 +265,8 @@ A **domain offer** is an offer created with the `DomainID` field set. Domain off
 
 A **hybrid offer** is an offer created with both the `DomainID` field set AND the `tfHybrid` flag enabled. Hybrid offers exist simultaneously in both the domain order book and the open order book, with a primary entry in the domain book and a secondary entry (via the `AdditionalBooks` field) in the open book. When a hybrid offer is created, it only crosses with offers in the domain book, since the `DomainID` is passed to the flow engine which uses that domain's order book. Once the hybrid offer is resting on the books, it can be consumed by both domain payments/offers (via the domain book entry) and open payments/offers (via the open book entry).[^hybrid-books]
 
-[^domain-book-segregation]: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L102-L110)
-[^hybrid-books]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L560-L602)
+[^domain-book-segregation]: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L102-L110)
+[^hybrid-books]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L560-L602)
 
 # 2. Ledger Entries
 
@@ -317,7 +317,7 @@ The `Offer` entry identifies its assets entirely through the `TakerPays` and `Ta
 
 The Offer entry itself does not store separate `TakerPaysCurrency`/`TakerPaysIssuer`/`TakerPaysMPT` (or the `TakerGets` equivalents) fields.[^offer-asset-amounts] Those broken-out asset identifiers live on the book directory root page, not the offer (see [DirectoryNode Fields](#223-fields)). All combinations of distinct XRP, IOU, and MPT assets are supported; an offer cannot pay and receive the same asset.
 
-[^offer-asset-amounts]: [`ledger_entries.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L227-L240)
+[^offer-asset-amounts]: [`ledger_entries.macro`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L227-L240)
 
 #### 2.1.2.2. Domain-Specific Fields
 
@@ -331,11 +331,11 @@ This field allows hybrid offers to be discovered and consumed by both domain and
 
 Under the `fixCleanup3_1_3` amendment, a valid hybrid offer must carry exactly one `AdditionalBooks` entry (the open order book). The `ValidPermissionedDEX` invariant rejects a hybrid offer whose `AdditionalBooks` array is missing, empty, or holds more than one entry. Before the amendment a present-but-empty array slipped through, since only a missing array or more than one entry failed the invariant.[^hybrid-additionalbooks-count]
 
-[^hybrid-additionalbooks-count]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L46-L75)
+[^hybrid-additionalbooks-count]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L46-L75)
 
 Under the `fixCleanup3_2_0` amendment, when a hybrid offer partially crosses on placement, the open-book `BookDirectory` referenced here is keyed by the offer's original placement rate, so it shares the same quality (`sfExchangeRate`) as the primary domain `BookDirectory`. Before the amendment the open-book directory was keyed from the post-crossing amounts and could differ slightly due to rounding.[^hybrid-open-book-rate]
 
-[^hybrid-open-book-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
+[^hybrid-open-book-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
 
 #### 2.1.2.3. Flags
 
@@ -375,7 +375,7 @@ The first 192 bits are the first 192 bits of [SHA512-Half](https://xrpl.org/docs
 
 The Book directory space key (`BOOK_DIR`) is `0x0042`. For XRP, the currency code is 160 bits of zeros and the issuer is 160 bits of zeros. The `domainID` is included only when specified (for permissioned domains).
 
-[^book-dir-hash]: Book directory hash computation: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L102-L141)
+[^book-dir-hash]: Book directory hash computation: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L102-L141)
 
 The last 64 bits encode the exchange rate (`takerPays / takerGets`) as a 64-bit value in big-endian format.
 
@@ -419,9 +419,9 @@ Pages form a doubly-linked list structure:
 - Empty intermediate pages cause the chain to be repaired by updating adjacent pages' links
 - The root page is only deleted when the entire directory becomes empty and `keepRoot` is false
 
-[^dir-page-limit]: [`ApplyView.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/ApplyView.cpp#L124-L129)
-[^page-keylet]: [`Indexes.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L362-L369)
-[^dir-append-insert]: [`ApplyView.h`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/ApplyView.h#L301-L354)
+[^dir-page-limit]: [`ApplyView.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/ApplyView.cpp#L124-L129)
+[^page-keylet]: [`Indexes.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Indexes.cpp#L362-L369)
+[^dir-append-insert]: [`ApplyView.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/ApplyView.h#L301-L354)
 
 ### 2.2.3. Fields
 
@@ -523,16 +523,16 @@ For this reason, certain `tec` outcomes are covered in the [state changes](#3112
 
 **MPT-specific validations**: When either `takerPays` or `takerGets` is an MPT, the transaction is validated using [`canTrade`](../mpts/README.md#361-cantrade). See [MPT Validation Functions](../mpts/README.md#36-mpt-validation-functions) for complete details on validation logic and error conditions.
 
-[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
-[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
-[^domainid-zero]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L99-L101)
-[^domain-cancel-regular]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L41-L43), [finalize](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L105-L111)
-[^offer-expired]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L222-L228), [doApply](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L651-L657)
-[^offer-bad-seq]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L215-L221)
-[^offercancel-bad-seq]: [`OfferCancel.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCancel.cpp#L34-L46)
-[^fok-killed]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L807-L812), [`features.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/features.macro#L100)
-[^ioc-killed]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L815-L825), [`features.macro`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/features.macro#L132)
-[^global-frozen]: [`TokenHelpers.cpp`](https://github.com/XRPLF/rippled/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L59-L65)
+[^checkAcceptAsset-noauth]: Unauthorized trust line returns auth errors: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L307)
+[^checkAcceptAsset-mpt-auth]: MPT authorization via requireAuth with WeakAuth: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L330-L340), [`View.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/MPTokenHelpers.cpp#L360-L384)
+[^domainid-zero]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L99-L101)
+[^domain-cancel-regular]: [`PermissionedDEXInvariant.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L41-L43), [finalize](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/invariants/PermissionedDEXInvariant.cpp#L105-L111)
+[^offer-expired]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L222-L228), [doApply](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L651-L657)
+[^offer-bad-seq]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L215-L221)
+[^offercancel-bad-seq]: [`OfferCancel.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCancel.cpp#L34-L46)
+[^fok-killed]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L807-L812), [`features.macro`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/features.macro#L100)
+[^ioc-killed]: [`OfferCreate.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L815-L825), [`features.macro`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/features.macro#L132)
+[^global-frozen]: [`TokenHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/TokenHelpers.cpp#L59-L65)
 
 **Validation during doApply:**
 
