@@ -55,9 +55,9 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     ammAccountId = ammSle[sfAccount]
 
     # In `xrpld`, this is called "expected", but probably only to reflect the returned type. A better name is "existing" or "currentBalances"
-    # FreezeHandling::ZeroIfFrozen: treat frozen assets as having zero balance
-    # AuthHandling::ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
-    currentBalances = ammHolds(sb, ammSle, amount, amount2, FreezeHandling::ZeroIfFrozen, AuthHandling::ZeroIfUnauthorized)
+    # FreezeHandling.ZeroIfFrozen: treat frozen assets as having zero balance
+    # AuthHandling.ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
+    currentBalances = ammHolds(sb, ammSle, amount, amount2, FreezeHandling.ZeroIfFrozen, AuthHandling.ZeroIfUnauthorized)
     if not currentBalances:
         return currentBalances.error()
 
@@ -157,7 +157,7 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
 
     else:
         # Should not happen (validated in preflight)
-        return (tecINTERNAL, false)
+        return (tecINTERNAL, False)
 
     # Update AMM state if deposit succeeded
     if result == tesSUCCESS:
@@ -446,7 +446,7 @@ def equalDepositInEmptyState(
 Single-asset deposits allow users to deposit only one asset instead of both assets proportionally. Unlike [multi-asset deposits](#4-multi-asset-deposit-modes) that maintain the pool ratio, single-asset deposits change the pool composition. Because they alter the pool ratio, [trading fees](#3-gettradingfee) apply to single-asset deposits. There are three modes:
 
 - **[singleDeposit](#51-singledeposit-tfsingleasset) (tfSingleAsset)**: User specifies deposit amount, receives calculated LP tokens
-- **[singleDepositTokens](#52-singledepositTokens-tfoneassetlptoken) (tfOneAssetLPToken)**: User specifies exact LP tokens desired, deposits calculated amount
+- **[singleDepositTokens](#52-singledeposittokens-tfoneassetlptoken) (tfOneAssetLPToken)**: User specifies exact LP tokens desired, deposits calculated amount
 - **[singleDepositEPrice](#53-singledepositeprice-tflimitlptoken) (tfLimitLPToken)**: User specifies deposit amount and effective price limit
 
 ## 5.1. singleDeposit (tfSingleAsset)

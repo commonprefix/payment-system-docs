@@ -246,8 +246,8 @@ flowchart LR
   - RPC [path finding](../path_finding/README.md) endpoints
   - CheckCash transaction
   - XChainBridge
-- **[toStrands](#4-tostrands)** is a function that converts a set of paths into strands, by calling `toStrand` on each one.
-- **[toStrand](#5-tostrand)** converts a single path to a strand through [path normalization](#51-path-normalization), [path to strand conversion](#52-path-to-strand-conversion), and [step generation](#53-step-generation)
+- **[toStrands](#4-converting-paths-to-strands-tostrands)** is a function that converts a set of paths into strands, by calling `toStrand` on each one.
+- **[toStrand](#5-path-normalization-and-strand-creation-tostrand)** converts a single path to a strand through [path normalization](#51-path-normalization), [path to strand conversion](#52-path-to-strand-conversion), and [step generation](#53-step-generation)
 - **[Iterative Strands Evaluation](#6-iterative-strands-evaluation-strandsflow)** is another function called `flow` (accepting a vector of `strands` as parameter) implemented in `StrandFlow.h`[^strandsflow-entrypoint]. In this document we refer to it as `strandsFlow`. It orchestrates evaluating each strand and deciding which of them to use.
 - **[Strand Flow](#7-single-strand-evaluation-strandflow)** (another function called `flow`, accepting a single `strand` as parameter) is implemented in `StrandFlow.h` in the paths/detail module[^strandflow-entrypoint]. In this document we refer to it as `strandFlow`. It evaluates a strand using the [two-pass method](#73-reverse-and-forward-passes).
 - **Finish Flow** (`finishFlow` function) cleans up after the execution is complete.
@@ -380,72 +380,49 @@ The `flow` function[^flow-entrypoint] is the entry point to the payment executio
 The `flow` function orchestrates payment execution by converting paths into strands and evaluating them to find the best liquidity. It executes the following operations in order:
 
 1. Creates an [`AMMContext`](#32-ammcontext) object initialized with `multiPath = false`
-2. Calls [`toStrands()`](#4-tostrands) to convert the provided paths (and optionally the default path) into executable strands
+2. Calls [`toStrands()`](#4-converting-paths-to-strands-tostrands) to convert the provided paths (and optionally the default path) into executable strands
 3. Sets `ammContext.multiPath = true` if `strands.size() > 1` (more than one strand exists)
 4. Calls [`strandsFlow()`](#6-iterative-strands-evaluation-strandsflow) to iteratively evaluate strands, consuming liquidity from the best-quality strands until the payment is satisfied or all liquidity is exhausted
 5. Calls `finishFlow()` to package the results and clean up state
 6. Returns the transaction result code, actual amount in, actual amount out, and any offers to remove
 
+**Engine state.** The pseudocode in this and later sections (`flow`, `strandsFlow`, `strandFlow`) refers to a shared set of state rather than threading every value through each function signature:
+
+```python
+# Engine state, shared across flow -> strandsFlow -> strandFlow
+sb:         PaymentSandbox     # working ledger view; writes are buffered and committed only if the payment succeeds
+deliver:    Amount            # amount + asset the destination must receive
+sendMax:    Optional[Amount]  # cap on what the source will spend (may be absent)
+ammContext: AMMContext        # AMM bookkeeping: single/multi-path flag + 30-iteration cap
+strands:    list[Strand]      # executable routes built from the input paths
+```
+
 ## 3.1. flow Pseudo-Code
 
 ```python
-def flow(
-    sb: PaymentSandbox,
-    deliver: STAmount,
-    src: AccountID,
-    dst: AccountID,
-    paths: STPathSet,
-    defaultPaths: bool,
-    partialPayment: bool,
-    ownerPaysTransferFee: bool,
-    offerCrossing: OfferCrossing,        
-    limitQuality: Optional[Quality],        
-    sendMax: Optional[STAmount],        
-    domainID: Optional[DomainID]
-) -> TER, Optional[actualIn], Optional[actualOut], offersToRemove:
-    # Create AMM context to track AMM-specific state throughout payment execution
-    ammContext = AMMContext(multiPath=false)
+def flow():
+    # Work out which assets move. The destination receives deliver's asset. The
+    # source spends sendMax's asset. For an IOU with no sendMax, the source
+    # spends its own issuance of that currency.
+    src_asset, dst_asset = determine_assets()
 
-    # Convert paths into executable strands
-    result = toStrands(
-        sb,
-        src,
-        dst,
-        deliver,
-        limitQuality,
-        sendMax,
-        paths,
-        defaultPaths,
-        ownerPaysTransferFee,
-        offerCrossing,
-        ammContext,
-        domainID
-    )
+    # Start AMM bookkeeping assuming a single route.
+    ammContext = single_path_context()
 
-    if result.ter != tesSUCCESS:
-        return result.ter, None, None, []
+    # PLAN: turn paths into executable strands. Routing only. The amount is not
+    # needed yet, just the asset to deliver.
+    strands = toStrands(dst_asset)
+    if not strands:
+        return failure_reason          # deliver nothing
 
-    strands = result.strands
+    # Record whether more than one route survived. This affects AMM offer sizing.
+    ammContext.multiPath = (len(strands) > 1)
 
-    # Update AMM context if multiple strands exist (affects AMM offer sizing strategy)
-    ammContext.setMultiPath(len(strands) > 1)
+    # EXECUTE: consume liquidity from the best strands until satisfied.
+    result = strandsFlow()
 
-    # Evaluate strands to consume liquidity
-    flowResult = strandsFlow(
-        sb,
-        strands,
-        deliver,
-        partialPayment,
-        offerCrossing,
-        limitQuality,
-        sendMax,
-        ammContext
-    )
-
-    # Package results and clean up state
-    finishFlow(sb, flowResult)
-
-    return flowResult.ter, flowResult.actualIn, flowResult.actualOut, flowResult.offersToRemove
+    # COMMIT: on success apply sb's buffered writes, then report.
+    return finishFlow(result)
 ```
 
 ## 3.2. AMMContext
@@ -901,172 +878,88 @@ During path-to-strand conversion, the algorithm tracks the current asset flowing
   The issuer is immutable once the MPT is created, so the entire `mptID` must be replaced when switching between different MPTs.
 
 ```python
-# For toStrand parameters, see table at the beginning of section 5
-def toStrand(...):
-    ...
-    Validation
-    Path normalization
-    ...
+# Local state for path -> strand conversion (toStrand)
+normPath: list[PathElement]   # path with implied source/dest/issuer hops added (see 5.1)
+curAsset: Issue | MPTIssue    # the asset currently flowing; updated as we walk the path
+result:   list[Step]          # the strand being built
+# loop-guard sets (seenDirectAssets, seenBookOuts) travel in StrandContext (see 5.2.1)
 
-    result: List[Step] = []
+def toStrand():
+    validate_path_elements()          # reject malformed elements early, returns temBAD_PATH
+    normPath = normalize(path)        # add implied source, destination, issuer hops (5.1)
 
-    # Initialize loop detection tracking (see section 5.2.1)
-    seenDirectAssets = [set(), set()]  # [source assets, destination assets]
-    seenBookOuts = set()
+    # Asset leaving the source. It is sendMax's asset if given, otherwise the
+    # deliver asset, resolved to XRP, the source's own IOU issuance, or the MPT.
+    curAsset = starting_asset()
 
-    # Context is recreated each iteration but holds references to shared state:
-    # - seenDirectAssets, seenBookOuts, ammContext are passed by reference (shared/reused)
-    # - Other parameters (view, deliver, limitQuality, etc.) passed from toStrand arguments
-    # - isLast varies per iteration (true for last pair, false otherwise)
-    # See section 5.2.1 for details on StrandContext
-    def ctx(isLast=False):
-        return StrandContext(
-            view, result, strandSrc, strandDst, deliver, limitQuality,
-            isLast, ownerPaysTransferFee, offerCrossing, isDefaultPath,
-            seenDirectAssets, seenBookOuts, ammContext, domainID)
+    # Walk adjacent element pairs. A step is built for `next`, so when `cur` is an
+    # offer and `next` is an account the offer's step already exists and is skipped.
+    for cur, next in adjacent_pairs(normPath):
+        curAsset = advance_asset(curAsset, cur)
 
-    # Pick sendMaxAsset if specified, otherwise deliver
-    asset = sendMaxAsset if sendMaxAsset else deliver
+        if cur.is_offer() and next.is_account():
+            # The offer already produced its step. The only case left is an offer
+            # paying out to a non-issuer account (the closing hop). Add a closing
+            # DirectStepI, or an XRPEndpointStep when the asset is XRP.
+            add_closing_step_if_needed(curAsset, next)
+            continue
 
-    if asset is MPTIssue:
-        curAsset = asset  # MPT: use as-is
-    elif isXRP(asset):
-        curAsset = xrpIssue()  # XRP: special XRP issue
-    else:
-        curAsset = Issue(asset.currency, src)  # IOU: currency with src as issuer
+        result.append(toStep(cur, next, curAsset))   # build the step for this pair (5.3.2)
 
-    # Iterate over pairs in normPath, cur is current, next is following path element
-    for i in range(len(normPath) - 1):
-        cur = normPath[i]
-        next = normPath[i + 1]
-
-        # Implied Path Element
-        impliedPe = None
-
-        # Switch from MPT to Currency if needed
-        if curAsset is MPTIssue and cur.hasCurrency():
-            curAsset = Issue()
-
-        # Update curAsset account (only for Issue, not MPTIssue)
-        if curAsset is Issue:
-            if cur.isAccount():
-                curAsset.account = cur.getAccountId()
-            elif cur.hasIssuer():
-                curAsset.account = cur.getIssuerId()
-
-        # Update curAsset currency/MPT
-        if cur.hasCurrency():
-            curAsset.currency = cur.getCurrency()
-            if isXRP(curAsset.currency):
-                curAsset.account = xrpAccount()
-        elif cur.hasMPT():
-            curAsset = MPTIssue(cur.getMPTID())
-
-        if cur.isAccount() and next.isAccount():
-            # NOTE: xrpld developers identified this block never executes because
-            # curAsset.issuer is always set to cur.getAccountID() above, making the
-            # first condition always false. For MPT, rippling is invalid.
-            if not isXRP(curAsset) and curAsset.issuer != cur.getAccountID() and curAsset.issuer != next.getAccountID():
-                result.add(DirectStepI(cur.getAccountId() -> curAsset.issuer))
-                impliedPe = STPathElement(typeAccount, curAsset.issuer)
-                cur = impliedPE
-
-        elif cur.isAccount() and next.isOffer():
-            # NOTE: xrpld developers identified this block never executes because
-            # curAsset.issuer is always set to cur.getAccountID() above, making the
-            # condition always false.
-            if curAsset.issuer != cur.getAccountId():
-                result.add(DirectStepI(cur.getAccountId() -> curAsset.issuer))
-                impliedPe = STPathElement(typeAccount, curAsset.issuer)
-                cur = impliedPe
-
-        elif cur.isOffer() and next.isAccount():
-            # If offer outputs to account that's not the issuer
-            if curAsset.issuer != next.getAccountId() and not isXRP(next.getAccountID()):
-                if isXRP(curAsset):
-                    if i != len(normPath) - 2:
-                        return temBAD_PATH  # XRP can only appear at a strand endpoint
-                    # Last step: insert XRP endpoint step
-                    result.add(XRPEndpointStep(next.getAccountId()))
-                else:
-                    # Insert DirectStepI from issuer to destination
-                    result.add(DirectStepI(curAsset.issuer -> next.getAccountId()))
-            continue  # Skip toStep call
-
-        if not (cur.isOffer() and next.isAccount()):
-            s = toStep(ctx(), cur, next, curAsset)
-            result.add(s)
-
-    ...
-    Strand validation
-    ...
-
+    check_strand(result)              # sanity-check connectivity and final asset
     return result
+
+
+def advance_asset(curAsset, cur):
+    # Switch from MPT to Currency if needed
+    if curAsset is MPT and cur.has_currency():
+        curAsset = empty_issue()
+    # Update curAsset account (only for Issue, not MPTIssue)
+    if curAsset is Issue:
+        if cur.is_account():
+            curAsset.issuer = cur.account
+        elif cur.has_issuer():
+            curAsset.issuer = cur.issuer
+    # Update curAsset currency/MPT
+    if cur.has_currency():
+        curAsset.currency = cur.currency    # XRP currency also clears the issuer
+    elif cur.has_mpt():
+        curAsset = cur.mpt                  # whole MPT replaced, its issuer is fixed
+    return curAsset
 ```
+
+> The implementation also contains two implied-step branches for `account->account` and `account->offer` pairs. The xrpld developers determined these are unreachable: `curAsset`'s issuer is always set to `cur`'s account just before the check, so their guards are always false. They are omitted here. See [`PaySteps.cpp:423-456`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L423-L456).
 
 ### 5.3.2. toStep Pseudo-Code
 
 ```python
-def toStep(
-    ctx,
-    e1: STPathElement,
-    e2: STPathElement,
-    curAsset: Asset)  # Asset can be Issue or MPTIssue
+# toStep is a factory: given an adjacent pair (e1, e2) and the flowing asset,
+# it picks and builds the right Step subclass.
+def toStep(e1, e2, curAsset):
+    # XRP at a strand endpoint becomes an XRPEndpointStep (source or destination).
+    if is_first and e1 is an XRP account:
+        return XRPEndpointStep(source = e1)
+    if is_last and e1 is an XRP account and e2 is an account:
+        return XRPEndpointStep(dest = e2)
 
-    # First element is account with XRP currency and this is first pair
-    if ctx.isFirst and e1.isAccount() and hasCurrency(e1) and isXRP(e1.getCurrency()):
-        return make_XRPEndpointStep(e1.getAccountId())
+    # Account to account moves one asset directly between two accounts.
+    if e1 is an account and e2 is an account:
+        if curAsset is MPT:
+            return MPTEndpointStep(e1, e2, curAsset)
+        return DirectStepI(e1, e2, curAsset)      # IOU over a trust line
 
-    # First element is XRP account (ID 0) and this is last pair
-    if ctx.isLast and isXRPAccount(e1) and e2.isAccount():
-        return make_XRPEndpointStep(e2.getAccountId())
+    # An offer paired with an account is resolved by the caller, so it never
+    # reaches here.
+    if e1 is an offer and e2 is an account:
+        unreachable()
 
-    # Both elements are accounts
-    if e1.isAccount() and e2.isAccount():
-        # Dispatch based on asset type
-        if curAsset is MPTIssue:
-            return make_MPTEndpointStep(e1.getAccountId(), e2.getAccountId(), curAsset.mptID)
-        else:  # curAsset is Issue
-            return make_DirectStepI(e1.getAccountId(), e2.getAccountId(), curAsset.currency)
-
-    # First element is offer, second is account (should be unreachable)
-    if e1.isOffer() and e2.isAccount():
-        raise UNREACHABLE  # Handled by implied step injection
-
-    # Second element is an order book - determine output asset
-    outAsset = e2.getPathAsset() if hasAsset(e2) else curAsset
-    outIssuer = e2.getIssuerId() if hasIssuer(e2) else curAsset.issuer
-
-    # XRP -> XRP is invalid
-    if isXRP(curAsset) and isXRP(outAsset):
+    # Otherwise e2 is an order book. Build the BookStep variant that matches the
+    # (input asset, output asset) types. XRP paired with XRP is rejected. The full
+    # variant list is in the BookStep selection table above (section 5.3).
+    out_asset, out_issuer = book_output(e2, curAsset)
+    if curAsset is XRP and out_asset is XRP:
         return temBAD_PATH
-
-    # Dispatch to appropriate BookStep based on input/output asset types
-    if isXRP(outAsset):
-        # Output is XRP
-        if curAsset is MPTIssue:
-            return make_BookStepMX(curAsset)
-        else:  # curAsset is Issue
-            return make_BookStepIX(curAsset)
-
-    if isXRP(curAsset):
-        # Input is XRP
-        if outAsset is MPT:
-            return make_BookStepXM(outAsset.mptID)
-        else:  # outAsset is Currency
-            return make_BookStepXI(outAsset.currency, outIssuer)
-
-    # Both are non-XRP assets (IOU or MPT)
-    if curAsset is MPTIssue:
-        if outAsset is MPT:
-            return make_BookStepMM(curAsset, outAsset.mptID)
-        else:  # outAsset is Currency
-            return make_BookStepMI(curAsset, outAsset.currency, outIssuer)
-    else:  # curAsset is Issue
-        if outAsset is MPT:
-            return make_BookStepIM(curAsset, outAsset.mptID)
-        else:  # outAsset is Currency
-            return make_BookStepII(curAsset, outAsset.currency, outIssuer)
+    return make_book_step(curAsset, out_asset, out_issuer)
 ```
 
 ### 5.3.3. Step Validation (`check`)
@@ -1260,141 +1153,88 @@ New output limit for this step will be set to ~46.350 EUR. Since partial payment
 
 ## 6.1. strandsFlow Pseudo-Code
 
-Please note that the following pseudocode is a simplified version of logic. One major difference is that pseudocode does not illustrate use of ActiveStrands, but it flattens its logic into the primary method.   
+Please note that the following pseudocode is a simplified version of the logic. It represents `activeStrands` at a high level, as re-ranking the surviving strands and re-queuing them, while abstracting the exact mechanics of the `ActiveStrands` class.
 
 ```python
-def strandsFlow(
-        baseView: PaymentSandbox,
-        strands: List[Strand],
-        outReq: XRPAmount | IOUAmount | MPTAmount,
-        partialPayment: bool,
-        offerCrossing: OfferCrossing,
-        limitQuality: Optional<Quality>,
-        sendMax: Optional<SendMaxST>,
-        ammContext: AMMContext,
-) -> TER, Optional[actualIn], Optional[actualOut], offersToRemove
-    # Create a writable sandbox layered on top of baseView for tracking changes
-    # All modifications happen here; can be committed (on success) or discarded (on failure)
+# Local state for iterative evaluation (strandsFlow)
+sb:            PaymentSandbox      # writable layer over baseView for this whole evaluation
+remainingOut:  Amount             # how much is still to be delivered
+remainingIn:   Optional[Amount]   # how much the source may still spend (from sendMax)
+activeStrands: list[Strand]       # strands still worth trying, re-ranked each pass
+savedIns, savedOuts: list[Amount] # per-pass amounts, summed smallest-first for precision
+
+def strandsFlow():
     sb = PaymentSandbox(baseView)
-
     remainingOut = outReq
-    remainingIn = sendMax if (bool) sendMax else None
-    curTry = 0
-    strandsWaitingToBeConsidered = strands
-    offersConsidered = 0
-    offersToRemoveOnFailure: Set = []
-    savedIns = []
-    savedOuts = []
+    remainingIn = sendMax                 # None when no sendMax was given
 
-    # Keep looping until we exhaust all outReq or sendMax (if specified) 
-    while remainingOut > 0 and (not remainingIn or remainingIn > 0):
-        if ++curTry >= maxTries:
-            return telFAILED_PROCESSING, offersToRemoveOnFailure
+    # Each pass consumes liquidity from the single best strand. Loop until the
+    # output is delivered, the sendMax is spent, or no strand can deliver more.
+    while remainingOut > 0 and (remainingIn is None or remainingIn > 0):
+        if passes >= 1000:                # safety cap
+            return telFAILED_PROCESSING
 
         # Better quality strands will be first
-        strandsToConsider = sort(strandsWaitingToBeConsidered, limitQuality)
-        strandsWaitingToBeConsidered = []
+        activeStrands = rank_by_quality(activeStrands, limitQuality)
+        ammContext.multiPath = (len(activeStrands) > 1)
 
-        ammContext.setMultiPath(len(strandsToConsider) > 1)
+        # AMM optimization: When only one strand with limitQuality exists, calculate the maximum
+        # output that maintains acceptable average quality. AMM pools degrade in quality as
+        # liquidity is consumed, so we pre-calculate how much we can safely request without
+        # violating the quality threshold (limitOut, section 6.3).
+        target_out = remainingOut
+        if len(activeStrands) == 1 and limitQuality:
+            target_out = limitOut(sb, activeStrands[0], remainingOut, limitQuality)
 
-        # AMM optimization: When only one strand with limitQuality exists, calculate the maximum output that maintains acceptable average quality.
-        # AMM pools degrade in quality as liquidity is consumed, so we pre-calculate how much we can safely request without violating the quality threshold.
-        limitedRemainingOut = remainingOut
-        adjustedRemOut = False
-        if len(strandsToConsider) == 1 and limitQuality:
-            strand = strandsToConsider.get(0)
-            limitedRemainingOut = limitOut(sb, strand, remainingOut, limitQuality)
-            adjustedRemOut = (limitedRemainingOut != remainingOut)
-
-        offersToRemove: Set = []
+        # Walk strands best-first and take the first acceptable one.
         best = None
-
-        for strandIndex in range(len(strandsToConsider)):
-            strand = strandsToConsider.get(strandIndex)
-
-            # Clear AMM liquidity flag before evaluating each strand. This flag tracks whether AMM was used in the current strand evaluation
+        for strand in activeStrands:
+            # Clear AMM liquidity flag before evaluating each strand
             ammContext.clear()
-
+            # If we are crossing offers, and limitQuality is defined, there is no leeway given.
+            # Do not consider any strand that has a lower quality.
             if offerCrossing and limitQuality and qualityUpperBound(strand) < limitQuality:
-                # If we are crossing offers, and limitQuality is defined, there is no leeway given. Do not consider any strand that has a lower quality
                 continue
-
-            f = strandFlow(strand, remainingIn, limitedRemainingOut)
-            # f contains:
-            # - f.in // How much was consumed
-            # - f.out // How much was delivered
-            # - f.inactive // There is no more liquidity in this strand
-            # - f.offersToRemove // Offers that cannot be consumed
-            # - f.offersUsed
-            offersToRemove += f.offersToRemove
-            offersToRemoveOnFailure.append(f.offersToRemove)
-            offersConsidered += f.offersUsed
-            
+            f = strandFlow(strand, remainingIn, target_out)   # evaluate one strand (section 7)
+            record_dead_offers(f)
             if not f.success or f.out == 0:
-                # Strand is dry or failed
+                continue                  # strand is dry or failed
+            # Reject the path if quality is below the limit quality. If we did reduce remaining
+            # out, we give quality some slack.
+            if limitQuality and quality(f) < limitQuality and not amm_slack(f):
                 continue
-                
-            # Calculate strand quality 
-            q = quality(f.out, f.in)
-
-            # adjustedRemOut is never true, unless AMM was involved.
-            if limitQuality and q < limitQuality and (not adjustedRemOut or not withinRelativeDistance(q, limitQuality)):
-                # Reject the path if quality is below the limit quality. If we did reduce remaining out, we give quality some slack.
-                continue
-
-            best = strand
-            sb.apply(best)
-            # AMM Logic: Update AMM context after consuming liquidity from best strand
-            ammContext.update()
-
-            if not f.inactive:
-                # The strand still has liquidity available, so we add it to strands to still consider in another iteration 
-                strandsWaitingToBeConsidered.add(strand)
-                strandsWaitingToBeConsidered.add(strandsToConsider[strandIndex + 1:])
-            
-            break # out of inner loop
+            best = f
+            # The strand still has liquidity available, so we add it to strands to still consider
+            # in another iteration
+            if f still has liquidity:
+                requeue(strand)
+            requeue(strands after this one)
+            break
 
         if best:
-            remainingOut -= best.out
-            savedOuts.add(best.out)
-            if sendMax:
-                remainingIn -= best.in
-                savedIns.add(best.in)
-        
-        sb.remove(offersToRemove)
-        
+            best.sandbox.apply(sb)        # commit this pass into sb
+            ammContext.update()
+            savedOuts.add(best.out); savedIns.add(best.in)
+            remainingOut = outReq - sum(savedOuts)
+            remainingIn = sendMax - sum(savedIns)     # when sendMax is set
+        remove_dead_offers(sb)
+
         # Break out of while (outer) loop if we did not find a good strand or we used too many offers
-        if not best or offersConsidered >= 1500:
+        if best is None or offers_considered >= 1500:
             break
 
     # Sum amounts from smallest to largest for better precision (avoids rounding errors)
-    # savedOuts and savedIns are sorted collections that accumulate amounts from each iteration
     actualOut = sum(savedOuts)
     actualIn = sum(savedIns)
+    return finalize_result(actualIn, actualOut)
 
-    # There is an amendment guard for fixFillOrKill in this block - but it's supported now and simplifies logic to assume
-    # it's enabled
 
-    if actualOut != outReq:
-        if actualOut > outReq:
-            # Sanity check. Could be caused by rounding errors.
-            return tefEXCEPTION, offersToRemoveOnFailure
-        
-        if not partialPayment:
-            if not offerCrossing or offerCrossing != "sell":
-                # If this is a buy offer crossing
-                return tecPATH_PARTIAL, actualIn, actualOut, offersToRemoveOnFailure
-        elif actualOut == 0:
-            return tecPATH_DRY, offersToRemoveOnFailure
-    
-    # At this point, actualOut != outReq only if offerCrossing is "sell" or there is no offer crossing
-    # We keep this logic from `xrpld` implementation, although it is a bit of a technical debt to introduction of 
-    # fixFillOrKill
-    if not partialPayment and offerCrossing == "sell" and remainingIn != 0:
-        return tecPATH_PARTIAL, actualIn, actualOut, offersToRemoveOnFailure
-    
-    return actualIn, actualOut, offersToRemoveOnFailure
-    
+# finalize_result picks the return code from how much was delivered:
+#   delivered == requested                        -> success (commit sb)
+#   delivered  > requested                        -> tefEXCEPTION (rounding sanity check)
+#   delivered  < requested and not partialPayment -> tecPATH_PARTIAL
+#   delivered == 0 and partialPayment             -> tecPATH_DRY
+# Sell-mode offer crossing adds a fill-or-kill check on leftover sendMax (omitted here).
 ```
 
 ## 6.2. qualityUpperBound
@@ -1721,90 +1561,70 @@ At this point, we can conclude that the strand can deliver 6.86 EUR to Bob in ex
 ## 7.4. strandFlow Pseudo-Code
 
 ```python
-def strandFlow(
-    baseView: PaymentSandbox,
-    strand: Strand,
-    maxIn: Optional[TInAmt],
-    out: TOutAmt        
-) -> StrandResult:
-    if strand.empty():
-        return {}
+# Local state for single-strand evaluation (strandFlow)
+sb:           PaymentSandbox   # buffered ledger changes for this strand
+afView:       PaymentSandbox   # "all funds" snapshot of balances at the start (detects unfunded offers)
+limitingStep: int             # index of the step that capped the flow (none until found)
 
-    offersToRemove: SortedSet = []
-    # Direct XRP-to-XRP transfers shouldn't use strand evaluation
-    # (strand.size() == 2 with both XRPEndpointSteps)
-    if isDirectXrpToXrp(strand):
-        return {'success': False, 'offersToRemove': offersToRemove}
-    
-    s = len(strand)
-    limitingStep = s
-    sb = baseView
-    afView = baseView # All funds view (preserves balances from start of current evaluation phase)
-    limitStepOut = None
-    
-    stepOut = out;
-    for i in range(s - 1, -1, -1): # s-1, s-2, ... 0
-        r = strand[i].rev(sb, afView, offersToRemove, stepOut)
-        if r.out == 0:
-            # The step has nothing to output. Path dry in reverse
-            return {'success': False, 'offersToRemove': offersToRemove}
-            
-        if i == 0 and maxIn and maxIn < r.in:
-            # Limiting step for *in* amount. This is the first step and it requires more *in* then *maxIn*
-            sb = baseView # Reset the sandbox, reverting offer consumption, resetting balances, etc.
-            limitingStep = i
-            
-            r = strand[i].fwd(sb, afView, offersToRemove, maxIn)
-            limitStepOut = r.out
-            if r.out == 0:
-                # first step is dry after applying maxIn limit
-                return {'success': False, 'offersToRemove': offersToRemove}
+def strandFlow(strand, maxIn, out):
+    if strand is empty or is a direct XRP->XRP transfer:
+        return failure
 
-            if r.in != maxIn:
-                # This is a sanity check that should never fail. It verifies that when the limiting step is re-executed
-                # in a "cleaner" environment (with the sandbox reset), it can still produce the same result.
-                return {'success': False, 'offersToRemove': offersToRemove}
-    
-        elif r.out != stepOut:
-            # Limiting step for out amount    
-            sb = baseView # Reset the sandbox
-            afView = baseView # Reset the AF view
-            limitingStep = i
-            
-            # Reexecute reverse direction with reduced stepOut
-            stepOut = r.out
-            r = strand[i].rev(sb, afView, offersToRemove, stepOut)
-            limitStepOut = r.out
+    # REVERSE pass: walk steps last -> first, asking each how much input it needs
+    # to produce the output the next step wants. See section 7.3.
+    stepOut = out
+    for step in reversed(strand):
+        step_in, step_out = step.rev(sb, afView, stepOut)
+        if step_out == 0:
+            return failure                  # strand is dry
 
-            if r.out == 0:
-                # Reducing desired **out** amount can end up with an **in** that is so tiny that it rounds the output to 0.
-                return {'success': False, 'offersToRemove': offersToRemove}
-            if r.out != stepOut:
-                # This is a sanity check that should never fail. It verifies that when the limiting step is re-executed
-                # in a "cleaner" environment (with the sandbox reset), it can still produce the same result.
-                return {'success': False, 'offersToRemove': offersToRemove}
+        if step is the first step and maxIn and step_in > maxIn:
+            # Input side is the bottleneck. Reset state and re-run this step
+            # forward, capped at maxIn. This becomes the limiting step.
+            reset(sb)
+            limitingStep = index(step)
+            step_in, step_out = step.fwd(sb, afView, maxIn)
+            if step_out == 0:
+                return failure
+            # This is a sanity check that should never fail. It verifies that when the limiting
+            # step is re-executed in a "cleaner" environment (with the sandbox reset), it can
+            # still produce the same result.
+            if step_in != maxIn:
+                return failure
+        elif step_out < stepOut:
+            # This step cannot deliver the full requested output. Reset state and
+            # re-run it in reverse for what it can actually deliver. It is the
+            # limiting step.
+            reset(sb, afView)
+            limitingStep = index(step)
+            stepOut = step_out
+            step_in, step_out = step.rev(sb, afView, stepOut)
+            if step_out == 0:
+                return failure
+            # This is a sanity check that should never fail. It verifies that when the limiting
+            # step is re-executed in a "cleaner" environment (with the sandbox reset), it can
+            # still produce the same result.
+            if step_out != stepOut:
+                return failure
 
-        # prev node needs to produce what this node wants to consume
-        stepOut = r.in
+        stepOut = step_in                   # the previous step must produce this
 
-    stepIn = limitStepOut
-    for i in range(limitingStep + 1, s):
-        r = strand[i].fwd(sb, afView, offersToRemove, stepIn)
-        if r.out == 0:
-            # A tiny **in** can round **out** to zero.
-            return {'success': False, 'offersToRemove': offersToRemove}
-        if r.in != stepIn:
-            # The limits should already have been found, so executing a strand forward from the limiting step should not find a new limit
-            return {'success': False, 'offersToRemove': offersToRemove}
-        stepIn = r.out
-            
-    # Amount of currency computed coming into the first step
-    strandIn = strand[0].cachedIn()
-    # Amount of currency computed coming out of the last step
-    strandOut = strand[-1].cachedOut()
-            
-    inactive = any(step->inactive() for step in strand)
-    return {'success': True, 'in': strandIn, 'out': strandOut, 'offersToRemove': offersToRemove, 'inactive': inactive, 'sb': sb}
+    # FORWARD pass: from the step after the limiting step to the last, recompute
+    # actual outputs now that the limited input is known. See section 7.3.
+    stepIn = limited_output_of(limitingStep)
+    for step in strand[limitingStep + 1:]:
+        step_in, step_out = step.fwd(sb, afView, stepIn)
+        if step_out == 0:
+            return failure                  # rounding drove output to zero
+        if step_in != stepIn:
+            return failure                  # limits already found; should not re-limit
+        stepIn = step_out
+
+    return success(
+        in = strand.first.cachedIn(),
+        out = strand.last.cachedOut(),
+        inactive = any(step.inactive() for step in strand),  # dry / too many offers
+        sandbox = sb)
 ```
 
 # 8. Validation and Error Codes

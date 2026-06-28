@@ -3,11 +3,11 @@
 - [1. Introduction](#1-introduction)
 - [2. Precision and Rounding](#2-precision-and-rounding)
   - [2.1. getRoundedLPTokens](#21-getroundedlptokens)
-    - [2.1.1. getRoundedLPTokens Pseudo-Code](#211-getroundedlptokens-pseudo-code)
+    - [2.1.1. getRoundedLPTokens Pseudo-Code](#211-getroundedlptokens-simple-pseudo-code)
   - [2.2. adjustLPTokens](#22-adjustlptokens)
     - [2.2.1. adjustLPTokens Pseudo-Code](#221-adjustlptokens-pseudo-code)
   - [2.3. getRoundedAsset](#23-getroundedasset)
-    - [2.3.1. getRoundedAsset Pseudo-Code](#231-getroundedasset-pseudo-code)
+    - [2.3.1. getRoundedAsset Pseudo-Code](#231-getroundedasset-simple-pseudo-code)
   - [2.4. adjustLPTokensOut (deposits)](#24-adjustlptokensout-deposits)
     - [2.4.1. adjustLPTokensOut Pseudo-Code](#241-adjustlptokensout-pseudo-code)
   - [2.5. adjustLPTokensIn (withdrawals)](#25-adjustlptokensin-withdrawals)
@@ -426,10 +426,15 @@ def changeSpotPriceQuality(
 
     if isXRP(getAsset(pool.out)):
         # TakerGets is XRP - calculate it first
-        return getAMMOfferStartWithTakerGets(pool, quality, tfee)
+        amounts = getAMMOfferStartWithTakerGets(pool, quality, tfee)
     else:
         # TakerPays is XRP (or both are IOUs) - calculate takerPays first
-        return getAMMOfferStartWithTakerPays(pool, quality, tfee)
+        amounts = getAMMOfferStartWithTakerPays(pool, quality, tfee)
+
+    # Even after sizing, the resulting offer may still be worse than the target.
+    if not amounts or Quality(amounts) < quality:
+        return None
+    return amounts
 ```
 
 #### 3.1.4.2. getAMMOfferStartWithTakerGets

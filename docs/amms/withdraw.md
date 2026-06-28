@@ -45,7 +45,7 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     ePrice = tx[~sfEPrice]
     ammSle = sb.getAMM(tx[sfAsset], tx[sfAsset2])
     if not ammSle:
-        return (tecINTERNAL, false)
+        return (tecINTERNAL, False)
 
     ammAccountID = ammSle[sfAccount]
 
@@ -61,17 +61,17 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     # This handles rounding issues for the last LP
     if rules.enabled(fixAMMv1_1):
         if not verifyAndAdjustLPTokenBalance(sb, lpTokens, ammSle, accountID_):
-            return (tecAMM_INVALID_TOKENS, false)
+            return (tecAMM_INVALID_TOKENS, False)
 
     # Get current trading fee (with potential discount)
     tfee = getTradingFee(view, ammSle, accountID_)
 
     # Get current pool balances
-    # FreezeHandling::ZeroIfFrozen: treat frozen assets as having zero balance
-    # AuthHandling::ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
-    currentBalances = ammHolds(sb, ammSle, amount.asset(), amount2.asset(), FreezeHandling::ZeroIfFrozen, AuthHandling::ZeroIfUnauthorized)
+    # FreezeHandling.ZeroIfFrozen: treat frozen assets as having zero balance
+    # AuthHandling.ZeroIfUnauthorized: treat unauthorized MPT holders as having zero balance
+    currentBalances = ammHolds(sb, ammSle, amount.asset(), amount2.asset(), FreezeHandling.ZeroIfFrozen, AuthHandling.ZeroIfUnauthorized)
     if not currentBalances:
-        return (currentBalances.error(), false)
+        return (currentBalances.error(), False)
 
     amountBalance, amount2Balance, lptAMMBalance = currentBalances
 
@@ -147,10 +147,10 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
 
     else:
         # Should not happen (validated in preflight)
-        return (tecINTERNAL, false)
+        return (tecINTERNAL, False)
 
     if result != tesSUCCESS:
-        return (result, false)
+        return (result, False)
 
     # Delete AMM if empty, or update LP token balance
     res = deleteAMMAccountIfEmpty(
@@ -163,9 +163,9 @@ def applyGuts(sb: &Sandbox, tx: Transaction):
     )
 
     if not res.second:
-        return (res.first, false)
+        return (res.first, False)
 
-    return (tesSUCCESS, true)
+    return (tesSUCCESS, True)
 ```
 
 # 3. getTradingFee
@@ -520,7 +520,7 @@ def singleWithdrawTokens(
 
 Withdraw a single asset with an effective price constraint.[^singleWithdrawEPrice]
 
-This mode allows users to control the effective price when redeeming LP tokens, where effective price is defined as the ratio of LP tokens redeemed to asset withdrawn. The user provides `EPrice` (minimum effective price) and optionally `Amount` (minimum withdrawal amount). Unlike deposits where users set a maximum effective price (to avoid overpaying), withdrawals use a minimum effective price constraint - a lower effective price means a better deal for the withdrawer (fewer LP tokens per asset withdrawn).
+This mode allows users to control the effective price when redeeming LP tokens, where effective price is defined as the ratio of LP tokens redeemed to asset withdrawn. The user provides `EPrice` (maximum effective price) and optionally `Amount` (minimum withdrawal amount). As with deposits, `EPrice` is an upper bound: the trade is sized so the effective price does not exceed `EPrice`. A lower effective price means a better deal for the withdrawer (fewer LP tokens per asset withdrawn).
 
 The function solves a derived formula from Equation 8 to calculate the LP tokens that achieve exactly the specified effective price. It then calculates the withdrawal amount as `tokensAdj / ePrice`. If the calculated amount is less than the user's optional `Amount` constraint, the transaction fails with `tecAMM_FAILED`.
 
@@ -615,13 +615,14 @@ def withdraw(
         lpTokensWithdraw,  # LP tokens to redeem
         tfee,              # Trading fee
         freezeHandling,    # How to handle frozen assets
+        authHandling,      # How to handle unauthorized MPT holders
         withdrawAll,       # Whether this is a complete withdrawal
         priorBalance:      # Withdrawer's prior XRP balance
     # Get withdrawer's current LP token balance
     lpTokens = ammLPHolds(view, ammSle, account, journal)
 
-    # Get current pool balances (accounting for freezes)
-    currentBalances = ammHolds(view, ammSle, amountWithdraw.issue, None, freezeHandling)
+    # Get current pool balances (accounting for freezes and authorization)
+    currentBalances = ammHolds(view, ammSle, amountWithdraw.issue, None, freezeHandling, authHandling)
     if not currentBalances:
         return (currentBalances.error(), STAmount{}, STAmount{}, STAmount{})
 

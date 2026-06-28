@@ -1,6 +1,6 @@
 # Index
 
-- [1. Introduction](#1-xrpld-strand-steps)
+- [1. Introduction](#1-introduction)
     - [1.1. Step Catalog](#11-step-catalog)
     - [1.2. Class Relationships](#12-class-relationships)
     - [1.3. Methods](#13-methods)
@@ -62,7 +62,7 @@
         - [5.5.1. `qualityUpperBound` Method](#551-qualityupperbound-method)
             - [5.5.1.1. `qualityUpperBound` Pseudo-Code](#5511-qualityupperbound-pseudo-code)
         - [5.5.2. `tipOfferQuality` Helper Function](#552-tipofferquality-helper-function)
-            - [5.5.2.1. `tipOfferQuality` Pseudo-Code](#5521-tipofferquality-pseudo-code)
+            - [5.5.2.1. `tipOfferQuality` Pseudo-Code](#552-tipofferquality-helper-function)
         - [5.5.3. `adjustQualityWithFees` - BookPaymentStep Implementation](#553-adjustqualitywithfees---bookpaymentstep-implementation)
             - [5.5.3.1. `adjustQualityWithFees` Pseudo-Code](#5531-adjustqualitywithfees-pseudo-code)
         - [5.5.4. `adjustQualityWithFees` - BookOfferCrossingStep Implementation](#554-adjustqualitywithfees---bookoffercrossingstep-implementation)
@@ -76,7 +76,7 @@ The [payment engine](README.md) in `xrpld` uses **[Strands](README.md#11-strands
 The **fundamental types** of steps in `xrpld`:
 
 1. **DirectStepI** - [IOU](../glossary.md#iou) transfer between accounts via trust line
-2. **BookStep** - Asset conversion through order books and [AMM](../glossary.md#amm) pools
+2. **BookStep** - Asset conversion through order books and [AMM](../amms/README.md) pools
 3. **XRPEndpointStep** - Strand endpoint for [XRP](../glossary.md#xrp) (first or last step only)
 4. **MPTEndpointStep** - Strand endpoint for [MPT](../glossary.md#mpt) (first or last step only)
 
@@ -213,6 +213,18 @@ DirectStepI handles [IOU](../glossary.md#iou) transfers along a single trust lin
 
 The `DirectStepI<TDerived>` template base class provides common implementation for `revImp`, `fwdImp`, `qualityUpperBound`, and base `check` validation. The concrete derived classes (`DirectIPaymentStep` and `DirectIOfferCrossingStep`) provide specialized implementations for `quality`, `maxFlow`, and context-specific `check` validation.
 
+The pseudocode below refers to a shared set of step state:
+
+```python
+# DirectStepI state (one trust-line hop moving `currency_` from src_ to dst_)
+src_, dst_: AccountID      # the two ends of the trust line this step moves value across
+currency_:  Currency       # the IOU being moved
+prevStep_:  Step or None   # upstream step, used to propagate quality and debt direction
+isLast_:    bool           # whether this is the strand's final step (caps destination quality)
+cache_:     RevResult      # reverse-pass result (in, srcToDst, out, debtDir), reused by fwdImp
+# Qualities are ratios where QUALITY_ONE means 1:1. roundUp/roundDown pick the rounding direction.
+```
+
 ## 2.1. Common Implementation
 
 ### 2.1.1. `revImp` Implementation
@@ -228,47 +240,38 @@ Given a requested output amount, this function[^directstepi-revimp]:
 #### 2.1.1.1. `revImp` Pseudo-Code
 
 ```python
-def revImp(sb, out: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
-    cache_.reset()
-
-    maxSrcToDst, srcDebtDir = maxFlow(sb, out)
+def revImp(sb, out):
+    maxSrcToDst, debtDir = maxFlow(sb, out)
 
     # srcQOut stands for Source Quality Out
     #   - the quality the source applies for sending funds
     # dstQIn stands for Destination Quality In
     #   - the quality the destination applies for receiving funds
     # Each quality can be a discount or a premium.
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Reverse)
-
-    # Set the IOU to currency and correct issuer pair
-    srcToDstIss.currency = currency_
-    srcToDstIss.account = dst_ if srcDebtDir == 'redeems' else src_
-
+    srcQOut, dstQIn = qualities(sb, debtDir, REVERSE)
     if maxSrcToDst <= 0:
-        cache_ = { in: 0, srcToDst: 0, out: 0, srcDebtDir}
-        return { in: 0, out: 0}
+        cache_ = zero
+        return (0, 0)
 
-    # This calculates how much needs to flow on the trust line to produce the desired output, accounting for the
-    # destination's quality-in adjustment
+    # This calculates how much needs to flow on the trust line to produce the desired output,
+    # accounting for the destination's quality-in adjustment
     #   - QUALITY_ONE is 1'000'000'000 and dstQIn is presented in terms where 95% is 950'000'000
     srcToDst = roundUp(out * QUALITY_ONE / dstQIn)
 
-    if srcToDst <= maxSrcToDst:  # Non-limiting case, we have enough liqudity
+    if srcToDst <= maxSrcToDst:  # Non-limiting case, we have enough liquidity
         # Calculate how much input is required for the promised output. The full transformation is:
-        #   in --[srcQOut]--> srcToDst --[dstQIn]--> out
+        #   in --[srcQOut]-> srcToDst --[dstQIn]-> out
         in = roundUp(srcToDst * srcQOut / QUALITY_ONE)
-        cache_ = { in: in, srcToDst: srcToDst, out: out, srcDebtDir}
-        # Update the trustline with appropriate srcToDst amount
-        directSendNoFee(sb, src_, dst_, srcToDstIss(srcToDst))
-        return { in: in, out: out}
+        move(sb, src_ -> dst_, srcToDst)
+        cache_ = (in, srcToDst, out, debtDir)
+        return (in, out)
 
     # We don't have enough liquidity, so we will require as much input as will produce maximum output we can have
     in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
     actualOut = roundDown(maxSrcToDst * dstQIn / QUALITY_ONE)
-    cache_ = { in: in, srcToDst: maxSrcToDst, out: actualOut, srcDebtDir}
-    # Update the trustline with the amount limited to liquidity of this step
-    directSendNoFee(sb, src_, dst_, srcToDstIss(maxSrcToDst))
-    return { in: in, out: actualOut}
+    move(sb, src_ -> dst_, maxSrcToDst)
+    cache_ = (in, maxSrcToDst, actualOut, debtDir)
+    return (in, actualOut)
 ```
 
 [^directstepi-revimp]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L503-L567)
@@ -282,43 +285,36 @@ The implementation mirrors `revImp` but works in the opposite direction. Given a
 #### 2.1.2.1. `fwdImp` Pseudo-Code
 
 ```python
-def fwdImp(sb, in: IOUAmount) -> (in: IOUAmount, out: IOUAmount):
+def fwdImp(sb, in):
     # This method should never be run before revImp
-    assert cache_ is not None
+    assert cache_ is set
 
     # Recalculate liquidity based on cached srcToDst from reverse pass
-    maxSrcToDst, srcDebtDir = maxFlow(sb, cache_.srcToDst)
-
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Forward)
-    srcToDstIss.currency = currency_
-    srcToDstIss.account = dst_ if srcDebtDir == 'redeems' else src_
-
+    maxSrcToDst, debtDir = maxFlow(sb, cache_.srcToDst)
+    srcQOut, dstQIn = qualities(sb, debtDir, FORWARD)
     if maxSrcToDst <= 0:
-        cache_ = { in: 0, srcToDst: 0, out: 0, srcDebtDir}
-        return { in: 0, out: 0}
+        cache_ = zero
+        return (0, 0)
 
     # Now, we are calculating srcToDst differently, since we care about the `in` amount
     srcToDst = roundDown(in * QUALITY_ONE / srcQOut)
-
-    if srcToDst <= maxSrcToDst:  # Non-limiting case, we have enough liqudity
+    if srcToDst <= maxSrcToDst:  # Non-limiting case, we have enough liquidity
         # Calculate how much output is provided for the required input.
         out = roundDown(srcToDst * dstQIn / QUALITY_ONE)
-        # There could be a difference, due to rounding, in reverse and forward pass. This function will update
-        # cache.in, cache.srcToDst and cache.out, but it will use smaller (more conservative) values if they
-        # changed from rev to fwd passes.
-        setCacheLimiting(in, srcToDst, out, srcDebtDir)
-        # Make the payment using the cached srcToDst value
-        directSendNoFee(sb, src_, dst_, srcToDstIss(cache_.srcToDst))
     else:
         # We don't have full liquidity
-        actualIn = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
+        in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
         out = roundDown(maxSrcToDst * dstQIn / QUALITY_ONE)
-        setCacheLimiting(actualIn, maxSrcToDst, out, srcDebtDir)
-        # Make the payment using the cached srcToDst value
-        directSendNoFee(sb, src_, dst_, srcToDstIss(cache_.srcToDst))
+
+    # There could be a difference, due to rounding, in reverse and forward pass. setCacheLimiting
+    # updates cache.in, cache.srcToDst and cache.out, but uses smaller (more conservative) values
+    # if they changed from rev to fwd passes.
+    setCacheLimiting(in, srcToDst, out, debtDir)
+    # Make the payment using the cached srcToDst value
+    move(sb, src_ -> dst_, cache_.srcToDst)
 
     # This ensures that the forward pass never returns better rates than reverse pass promised
-    return { in: cache_.in, out: cache_.out}
+    return (cache_.in, cache_.out)
 ```
 
 [^directstepi-fwdimp]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L617-L682)
@@ -362,47 +358,39 @@ When an issuer sends IOUs to a holder:
 #### 2.1.3.1. Quality Functions Pseudo-Code
 
 ```python
-def qualities(sb, srcDebtDir: DebtDirection, strandDir: StrandDirection) -> (srcQOut, dstQIn):
-    if srcDebtDir == "redeems":
+def qualities(sb, debtDir, strandDir):
+    if debtDir == REDEEMS:
         # Source is holder sending to issuer
         return qualitiesSrcRedeems(sb)
-    else:
-        # Source is issuer sending to holder
-        # Need to check previous step's debt direction to determine if transfer fee applies
-        if prevStep_:
-            prevStepDebtDir = prevStep_.debtDirection(sb, strandDir)
-        else:
-            prevStepDebtDir = "issues"
-        return qualitiesSrcIssues(sb, prevStepDebtDir)
+    # Source is issuer sending to holder
+    # Need to check previous step's debt direction to determine if transfer fee applies
+    prevDebtDir = prevStep_.debtDirection(sb, strandDir) if prevStep_ else ISSUES
+    return qualitiesSrcIssues(sb, prevDebtDir)
 
-def qualitiesSrcRedeems(sb) -> (srcQOut, dstQIn):
+def qualitiesSrcRedeems(sb):
     # This is the first step
     if not prevStep_:
-        return {QUALITY_ONE, QUALITY_ONE}
+        return (QUALITY_ONE, QUALITY_ONE)
 
     prevStepQIn = prevStep_.lineQualityIn(sb)
-    srcQOut = quality(sb, QualityDirection::Out)
-
+    srcQOut = quality(sb, OUT)
     # Use the worse of the two qualities (higher value = worse for sender)
     if prevStepQIn > srcQOut:
         srcQOut = prevStepQIn
+    return (srcQOut, QUALITY_ONE)
 
-    return {srcQOut, QUALITY_ONE}
-
-def qualitiesSrcIssues(sb, prevStepDebtDirection) -> (srcQOut, dstQIn):
+def qualitiesSrcIssues(sb, prevDebtDir):
     # Charge transfer rate when issuing and previous step redeems
-    if prevStepDebtDirection == "redeems":
-        srcQOut = transferRate(sb, src_).value
+    if prevDebtDir == REDEEMS:
+        srcQOut = transferRate(sb, src_)
     else:
         srcQOut = QUALITY_ONE
 
-    dstQIn = quality(sb, QualityDirection::In)
-
+    dstQIn = quality(sb, IN)
     # If this is the last step, cap destination quality at QUALITY_ONE
     if isLast_ and dstQIn > QUALITY_ONE:
         dstQIn = QUALITY_ONE
-
-    return {srcQOut, dstQIn}
+    return (srcQOut, dstQIn)
 ```
 
 [^directstepi-qualities]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L776-L792)
@@ -418,24 +406,23 @@ The implementation is the same for both `DirectIPaymentStep` and `DirectIOfferCr
 #### 2.1.4.1. `qualityUpperBound` Pseudo-Code
 
 ```python
-def qualityUpperBound(v: ReadView, prevStepDir: DebtDirection) -> (q: Quality, dir: DebtDirection):
+def qualityUpperBound(v, prevStepDir):
     # Determine debt direction for this step
-    dir = debtDirection(v, StrandDirection::Forward)
+    dir = debtDirection(v, FORWARD)
 
     # Calculate qualities based on whether source is redeeming or issuing
-    if dir == "redeems":
+    if dir == REDEEMS:
         srcQOut, dstQIn = qualitiesSrcRedeems(v)
     else:
         srcQOut, dstQIn = qualitiesSrcIssues(v, prevStepDir)
 
     iss = Issue(currency_, src_)
-        
     # Quality is the composite of srcQOut and dstQIn
     # Rate = srcQOut / dstQIn (because Input * dstQIn / srcQOut = Output)
     # getRate(offerOut, offerIn) returns offerIn/offerOut, so we pass parameters reversed:
     # getRate(dstQIn, srcQOut) returns srcQOut/dstQIn
     q = getRate(iss(dstQIn), iss(srcQOut))
-    return {q, dir}
+    return (q, dir)
 ```
 
 [^directstepi-qualityupperbound]: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L804-L819)
@@ -474,18 +461,18 @@ The `quality` method[^directipaymentstep-quality] returns the quality adjustment
 #### 2.2.1.1. `quality` Pseudo-Code
 
 ```python
-def quality(sb, qDir: QualityDirection) -> int:
+def quality(sb, qDir):
     # Same account, no quality adjustment
     if src_ == dst_:
         return QUALITY_ONE
 
     # Read trust line
-    sle = sb.read(keylet::line(dst_, src_, currency_))
+    sle = sb.read(keylet.line(dst_, src_, currency_))
     if not sle:
         return QUALITY_ONE
 
     # Determine which quality field to read based on direction and account ordering
-    if qDir == QualityDirection::In:
+    if qDir == IN:
         # Destination quality in
         field = sfLowQualityIn if dst_ < src_ else sfHighQualityIn
     else:
@@ -494,11 +481,9 @@ def quality(sb, qDir: QualityDirection) -> int:
 
     if not sle.isFieldPresent(field):
         return QUALITY_ONE
-
     q = sle[field]
     if not q:
         return QUALITY_ONE
-
     return q
 ```
 
@@ -519,18 +504,18 @@ In DirectIPaymentStep, `maxFlow` returns:
 
 ```python
 # The out parameter is unused
-def maxFlow(sb, out) -> (maxSrcToDst, srcDebtDir):
+def maxFlow(sb, out):
     # Get the balance of src_ on the trustline
-    srcOwed = accountHolds(sb, src_, currency_, dst_, FreezeHandling::IgnoreFreeze)
+    srcOwed = accountHolds(sb, src_, currency_, dst_, FreezeHandling.IgnoreFreeze)
 
     if srcOwed > 0:
         # Holder is sending to issuer, they can only send as much as was issued to them
-        return {maxSrcToDst: srcOwed, "redeems"}
+        return (srcOwed, REDEEMS)
 
     # Issuer is sending to holder
     # creditLimit2 returns the trust line limit the holder (dst_) set for the issuer (src_)
     # Adding srcOwed (which is negative or zero) gives us remaining capacity
-    return {maxSrcToDst: creditLimit2(sb, dst_, src_, currency_) + srcOwed, "issues"}
+    return (creditLimit2(sb, dst_, src_, currency_) + srcOwed, ISSUES)
 ```
 
 ### 2.2.3. `check` Implementation
@@ -572,6 +557,16 @@ The function[^directioffercrossingstep-check] has no additional failure conditio
 
 # 3. XRPEndpointStep
 
+The pseudocode below refers to a shared set of step state:
+
+```python
+# XRPEndpointStep state (moves XRP to/from the strand at acc_)
+acc_:    AccountID   # the real account XRP enters from or exits to
+isLast_: bool        # True if this is the destination endpoint, False if the source
+# xrpAccount() is a zero sentinel marking where XRP enters/leaves the flow, not a real account.
+# XRP transfers are 1:1, so quality is always QUALITY_ONE.
+```
+
 ## 3.1. `revImp` Implementation
 
 [^xrpendpointstep-revimp]: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L261-L279)
@@ -581,7 +576,7 @@ The function[^directioffercrossingstep-check] has no additional failure conditio
 ### 3.1.1. `revImp` Pseudo-Code
 
 ```python
-def revImp(sb, afView, ofrsToRm, out: XRPAmount) -> (in: XRPAmount, out: XRPAmount):
+def revImp(sb, out):
     # xrpLiquid calculates available XRP balance accounting for reserves
     # For payment steps: no reserve reduction
     # For offer crossing steps: if this is the first step and the trust line/MPToken
@@ -592,16 +587,11 @@ def revImp(sb, afView, ofrsToRm, out: XRPAmount) -> (in: XRPAmount, out: XRPAmou
     # If this is the first step (source), limited by available balance
     result = out if isLast_ else min(balance, out)
 
-    sender = xrpAccount() if isLast_ else acc_
-    receiver = acc_ if isLast_ else xrpAccount()
-
-    ter = accountSend(sb, sender, receiver, toSTAmount(result))
-
-    if ter != tesSUCCESS:
-        return {in: 0, out: 0}
-
+    sender, receiver = (xrpAccount(), acc_) if isLast_ else (acc_, xrpAccount())
+    if accountSend(sb, sender, receiver, result) != tesSUCCESS:
+        return (0, 0)
     cache_ = result
-    return {in: result, out: result}
+    return (result, result)  # 1:1, so in == out
 ```
 
 ## 3.2. `fwdImp` Implementation
@@ -613,24 +603,17 @@ def revImp(sb, afView, ofrsToRm, out: XRPAmount) -> (in: XRPAmount, out: XRPAmou
 ### 3.2.1. `fwdImp` Pseudo-Code
 
 ```python
-def fwdImp(sb, afView, ofrsToRm, inAmount: XRPAmount) -> (in: XRPAmount, out: XRPAmount):
-    assert cache_ is not None
-
+def fwdImp(sb, in):
+    assert cache_ is set
     balance = xrpLiquid(sb)
-
     # If destination, accept all input
     # If source, limited by balance
-    result = inAmount if isLast_ else min(balance, inAmount)
-
-    sender = xrpAccount() if isLast_ else acc_
-    receiver = acc_ if isLast_ else xrpAccount()
-
-    ter = accountSend(sb, sender, receiver, toSTAmount(result))
-    if ter != tesSUCCESS:
-        return {in: 0, out: 0}
-
+    result = in if isLast_ else min(balance, in)
+    sender, receiver = (xrpAccount(), acc_) if isLast_ else (acc_, xrpAccount())
+    if accountSend(sb, sender, receiver, result) != tesSUCCESS:
+        return (0, 0)
     cache_ = result
-    return {in: result, out: result}
+    return (result, result)
 ```
 
 ## 3.3. `qualityUpperBound` Implementation
@@ -642,8 +625,8 @@ def fwdImp(sb, afView, ofrsToRm, inAmount: XRPAmount) -> (in: XRPAmount, out: XR
 ### 3.3.1. `qualityUpperBound` Pseudo-Code
 
 ```python
-def qualityUpperBound(prevStepDir: DebtDirection) -> (q: Quality, dir: DebtDirection):
-    return {QUALITY_ONE, "issues"}
+def qualityUpperBound(prevStepDir):
+    return (QUALITY_ONE, ISSUES)                     # XRP transfers are always 1:1
 ```
 
 ## 3.4. `check` Implementation
@@ -671,11 +654,22 @@ MPTEndpointStep handles Multi-Purpose Token (MPT) transfers at the source or des
 [^mpt-issuer-check]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L893-L897)
 [^mpt-debt-direction]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L459-L464)
 
-For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the issuing step (when `qualitiesSrcIssues` sees that the previous step redeemed). See [Direct MPT Payment Execution](../payments/README.md#43-mpt-payment-execution) for detailed holder-to-holder transfer mechanics.
+For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the issuing step (when `qualitiesSrcIssues` sees that the previous step redeemed). See [Direct MPT Payment Execution](../payments/README.md#4-payment-execution-paths) for detailed holder-to-holder transfer mechanics.
 
 For non-issuer accounts, authorization is validated via `requireAuth`[^mpt-require-auth], which checks the [`lsfMPTRequireAuth`](../mpts/README.md#2121-flags) flag on the issuance and the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken. When the issuance has a [DomainID](../mpts/README.md#11-domainid-and-authorization) set, credentials are validated against that domain. DEX operations validate the [`lsfMPTCanTrade`](../mpts/README.md#2121-flags) flag via [`canTrade`](../mpts/README.md#361-cantrade); issuance- and holder-level lock flags are checked separately by `isGlobalFrozen` and `isIndividualFrozen`.
 
 [^mpt-require-auth]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L342-L349)
+
+The pseudocode below refers to a shared set of step state:
+
+```python
+# MPTEndpointStep state (moves MPT `mptIssue_` between src_ and dst_; one end is the issuer)
+src_, dst_: AccountID    # the two ends; exactly one is the MPT issuer
+mptIssue_:  MPTIssue     # the MPT being moved
+prevStep_:  Step or None # upstream step, used to propagate quality and debt direction
+cache_:     RevResult    # reverse-pass result, reused by fwdImp
+# MPTs have no trust-line quality, so dstQIn is always QUALITY_ONE (quality reduces to srcQOut).
+```
 
 ## 4.1. `revImp` Implementation
 
@@ -698,70 +692,57 @@ For offer crossing, `checkCreateMPT` may create the MPToken entry for the offer 
 ### 4.1.1. `revImp` Pseudo-Code
 
 ```python
-def revImp(sb, afView, ofrsToRm, out: MPTAmount) -> (in: MPTAmount, out: MPTAmount):
-    cache_.reset()
-
+def revImp(sb, out):
     # Determine max flow and direction
-    maxSrcToDst, srcDebtDir = maxPaymentFlow(sb)
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Reverse)
-
+    maxSrcToDst, debtDir = maxPaymentFlow(sb)
+    srcQOut, dstQIn = qualities(sb, debtDir, REVERSE)
     if maxSrcToDst <= 0:
-        resetCache(srcDebtDir)
-        return {0, 0}
+        cache_ = zero
+        return (0, 0)
 
     # Offer crossing: create MPToken if needed
-    if checkCreateMPT(sb, srcDebtDir) != tesSUCCESS:
-        return {0, 0}
+    if checkCreateMPT(sb, debtDir) != tesSUCCESS:
+        return (0, 0)
 
     # dstQIn is always QUALITY_ONE for MPT
     srcToDst = out
-
     if srcToDst <= maxSrcToDst:
         # Non-limiting
         in = roundUp(srcToDst * srcQOut / QUALITY_ONE)
-        cache_ = {in, srcToDst, srcToDst, srcDebtDir}
+        move(sb, src_ -> dst_, srcToDst)
+        cache_ = (in, srcToDst, srcToDst, debtDir)
+        return (in, out)
 
-        ter = directSendNoFee(sb, src_, dst_, srcToDst, checkIssuer=False)
-        if ter != tesSUCCESS:
-            resetCache(srcDebtDir)
-            return {0, 0}
-        return {in, out}
-    else:
-        # Limiting
-        in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
-        actualOut = maxSrcToDst
-        cache_ = {in, maxSrcToDst, actualOut, srcDebtDir}
-
-        ter = directSendNoFee(sb, src_, dst_, maxSrcToDst, checkIssuer=False)
-        if ter != tesSUCCESS:
-            resetCache(srcDebtDir)
-            return {0, 0}
-        return {in, actualOut}
+    # Limiting
+    in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
+    move(sb, src_ -> dst_, maxSrcToDst)
+    cache_ = (in, maxSrcToDst, maxSrcToDst, debtDir)
+    return (in, maxSrcToDst)
 ```
 
 **Helper: `maxPaymentFlow()`**
 
 ```python
-def maxPaymentFlow(sb: ReadView) -> (MPTAmount, DebtDirection):
-    maxFlow = accountFunds(src_, mptIssue_, FreezeHandling::IgnoreFreeze, AuthHandling::IgnoreAuth)
+def maxPaymentFlow(sb):
+    maxFlow = accountFunds(src_, mptIssue_)
 
     # Holder to issuer (redeeming)
     if src_ != issuer:
-        return {maxFlow, "redeems"}
+        return (maxFlow, REDEEMS)
 
     # Issuer to holder (issuing)
     sle = sb.getIssuance(mptIssue_)
     if sle:
         # Direct from issuer (only step)
         if not prevStep_:
-            return {maxFlow, "issues"}
+            return (maxFlow, ISSUES)
 
         # Last step with issuer as source
         # Allow temporary overflow - previous step limits flow
         maxAmount = sle[sfMaximumAmount] or kMaxMpTokenAmount
-        return {maxAmount, "issues"}
+        return (maxAmount, ISSUES)
 
-    return {0, "issues"}
+    return (0, ISSUES)
 ```
 
 ## 4.2. `fwdImp` Implementation
@@ -773,42 +754,25 @@ def maxPaymentFlow(sb: ReadView) -> (MPTAmount, DebtDirection):
 ### 4.2.1. `fwdImp` Pseudo-Code
 
 ```python
-def fwdImp(sb, afView, ofrsToRm, in: MPTAmount) -> (in: MPTAmount, out: MPTAmount):
-    assert cache_ is not None
-
-    maxSrcToDst, srcDebtDir = maxPaymentFlow(sb)
-    srcQOut, dstQIn = qualities(sb, srcDebtDir, StrandDirection::Forward)
-
+def fwdImp(sb, in):
+    assert cache_ is set                                 # revImp always runs first
+    maxSrcToDst, debtDir = maxPaymentFlow(sb)
+    srcQOut, _ = qualities(sb, debtDir, FORWARD)
     if maxSrcToDst <= 0:
-        resetCache(srcDebtDir)
-        return {0, 0}
+        cache_ = zero; return (0, 0)
+    if checkCreateMPT(sb, debtDir) != tesSUCCESS:
+        return (0, 0)
 
-    if checkCreateMPT(sb, srcDebtDir) != tesSUCCESS:
-        return {0, 0}
-
-    srcToDst = mulRatio(in, QUALITY_ONE, srcQOut, roundUp=False)
-
+    srcToDst = roundDown(in * QUALITY_ONE / srcQOut)
     if srcToDst <= maxSrcToDst:
         out = srcToDst
-        setCacheLimiting(in, srcToDst, out, srcDebtDir)
-
-        # Transfer MPT using cached amount from reverse pass
-        ter = directSendNoFee(sb, src_, dst_, toSTAmount(cache_.srcToDst, mptIssue_), checkIssuer=False)
-        if ter != tesSUCCESS:
-            resetCache(srcDebtDir)
-            return {0, 0}
-    else:
-        actualIn = mulRatio(maxSrcToDst, srcQOut, QUALITY_ONE, roundUp=True)
+    else:                                                # liquidity-limited
+        in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
         out = maxSrcToDst
-        setCacheLimiting(actualIn, maxSrcToDst, out, srcDebtDir)
-
-        # Transfer MPT using cached amount from reverse pass
-        ter = directSendNoFee(sb, src_, dst_, toSTAmount(cache_.srcToDst, mptIssue_), checkIssuer=False)
-        if ter != tesSUCCESS:
-            resetCache(srcDebtDir)
-            return {0, 0}
-
-    return {cache_.in, cache_.out}
+    setCacheLimiting(in, srcToDst, out, debtDir)         # never exceed what revImp promised
+    # Transfer MPT using cached amount from reverse pass
+    move(sb, src_ -> dst_, cache_.srcToDst)
+    return (cache_.in, cache_.out)
 ```
 
 ## 4.3. `qualityUpperBound` Implementation
@@ -824,15 +788,15 @@ The `srcQOut` value depends on the debt direction:
   - If previous step redeems: `srcQOut = transferRate(mptID)` (an issuance-level transfer fee set via the MPToken issuance's `TransferFee` field)
   - Otherwise: `srcQOut = QUALITY_ONE`
 
-Transfer fees only apply when tokens move between holders through the issuer as an intermediary. See [Holder-to-Holder Transfer](../payments/README.md#4313-holder-to-holder-transfer-with-transfer-fee) for the two-step transfer fee mechanism.
+Transfer fees only apply when tokens move between holders through the issuer as an intermediary. See [Holder-to-Holder Transfer](../payments/README.md#4-payment-execution-paths) for the two-step transfer fee mechanism.
 
 ### 4.3.1. `qualityUpperBound` Pseudo-Code
 
 ```python
-def qualityUpperBound(sb, prevStepDir: DebtDirection) -> (Quality, DebtDirection):
-    dir = debtDirection(sb, StrandDirection::Forward)
+def qualityUpperBound(sb, prevStepDir):
+    dir = debtDirection(sb, FORWARD)
 
-    if dir == "redeems":
+    if dir == REDEEMS:
         srcQOut, dstQIn = qualitiesSrcRedeems(sb)
     else:
         srcQOut, dstQIn = qualitiesSrcIssues(sb, prevStepDir)
@@ -841,32 +805,31 @@ def qualityUpperBound(sb, prevStepDir: DebtDirection) -> (Quality, DebtDirection
     # getRate(offerOut, offerIn) returns offerIn/offerOut
     # For direct step, rate = srcQOut/dstQIn, so pass dstQIn first
     quality = getRate(QUALITY_ONE, srcQOut)
-
-    return {quality, dir}
+    return (quality, dir)
 ```
 
 ```python
-def qualitiesSrcRedeems() -> (uint32, uint32):
+def qualitiesSrcRedeems():
     if not prevStep_:
-        return {QUALITY_ONE, QUALITY_ONE}
+        return (QUALITY_ONE, QUALITY_ONE)
 
     prevStepQIn = prevStep_.lineQualityIn()
     srcQOut = QUALITY_ONE
     if prevStepQIn > srcQOut:
         srcQOut = prevStepQIn
-
-    return {srcQOut, QUALITY_ONE}
+    return (srcQOut, QUALITY_ONE)
 ```
 
 ```python
-def qualitiesSrcIssues(prevStepDebtDirection: DebtDirection) -> (uint32, uint32):
+def qualitiesSrcIssues(prevDebtDir):
     # Charge transfer rate when issuing and previous step redeems
-    if prevStepDebtDirection == "redeems":
-        srcQOut = transferRate(mptID).value
+    if prevDebtDir == REDEEMS:
+        srcQOut = transferRate(mptID)
     else:
         srcQOut = QUALITY_ONE
 
-    return {srcQOut, QUALITY_ONE}
+    # Unlike trustline, MPT doesn't have line quality field
+    return (srcQOut, QUALITY_ONE)
 ```
 
 ## 4.4. `check` Implementation
@@ -1053,6 +1016,18 @@ Like other step implementations, BookStep maintains state between reverse and fo
 
 Throughout this section, member variables suffixed with `_` (e.g., `book_`, `ownerPaysTransferFee_`) represent object state that persists across method calls. 
 
+```python
+# BookStep state (converts book_.in -> book_.out via CLOB offers and an AMM pool)
+book_:                  Book                 # asset pair (+ optional domain) for this order book
+strandSrc_, strandDst_: AccountID            # the strand's overall source and destination
+prevStep_:              Step or None
+ownerPaysTransferFee_:  bool                 # True for offer crossing (owner pays the output fee)
+ammLiquidity_:          AMMLiquidity or None # synthetic AMM offers for this pair, if a pool exists
+ammContext:             AMMContext           # shared single/multi-path flag + 30-iteration AMM cap
+cache_:                 RevResult            # reverse-pass (in, out), reused by fwdImp
+inactive_:              bool                 # set when too many offers consumed (DoS guard)
+```
+
 ## 5.1. `revImp` Implementation
 
 [^bookstep-revimp]: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L998-L1105)
@@ -1070,101 +1045,42 @@ Given a requested output amount, this function:
 ### 5.1.1. `revImp` Pseudo-Code
 
 ```python
-def revImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
-           out: TOut) -> (in: TIn, out: TOut):
-    cache_.reset()
-    result = (in=0, out=0)
+def revImp(sb, out):
     remainingOut = out
-
-    # Multisets for accumulating amounts (implementation uses flat_multiset)
-    savedInputs = []
-    savedOutputs = []
+    result = (in=0, out=0)
 
     # Callback invoked by forEachOffer for each offer in the book
-    def eachOffer(offer, offerAmount, stepAmount, ownerGives,
-                  transferRateIn, transferRateOut):
-        nonlocal result, remainingOut
-
+    def eachOffer(offer, offerAmount, stepAmount, ownerGives, rateIn, rateOut):
         # Stop if we've satisfied the desired output
         if remainingOut <= 0:
-            return False
-
+            return STOP
         # Check if we can consume entire offer with remaining output needed
         if stepAmount.out <= remainingOut:
             # Consume entire offer
-            savedInputs.append(stepAmount.in)
-            savedOutputs.append(stepAmount.out)
-            result = (in=sum(savedInputs), out=sum(savedOutputs))
-            remainingOut = out - result.out
-
+            result += stepAmount
+            remainingOut -= stepAmount.out
             consumeOffer(sb, offer, offerAmount, stepAmount, ownerGives)
-
-            # Return true to continue even if payment satisfied,
-            # because we need to consume the offer
-            return True
-        else:
-            # Consume partial offer - limit by remaining output needed
-            adjustedOfferAmount = offerAmount
-            adjustedStepAmount = stepAmount
-            adjustedOwnerGives = ownerGives
-
-            limitStepOut(
-                offer,
-                adjustedOfferAmount,
-                adjustedStepAmount,
-                adjustedOwnerGives,
-                transferRateIn,
-                transferRateOut,
-                remainingOut
-            )
-
-            remainingOut = 0
-            savedInputs.append(adjustedStepAmount.in)
-            # Note: appends 0 here, but result.out is set to 'out' below
-            savedOutputs.append(remainingOut)
-            result.in = sum(savedInputs)
-            result.out = out
-
-            consumeOffer(sb, offer, adjustedOfferAmount, adjustedStepAmount, adjustedOwnerGives)
-
-            # Check if offer is still funded after consumption
-            # If the mantissas of two IOU amounts differ by less than ten,
-            # then subtracting them leaves a zero
-            return offer.fully_consumed()
+            # Return true to continue even if payment satisfied, because we need to consume the offer
+            return CONTINUE
+        # Consume partial offer - limit by remaining output needed
+        limitStepOut(offer, offerAmount, stepAmount, ownerGives, rateIn, rateOut, remainingOut)
+        result.in += stepAmount.in; result.out = out; remainingOut = 0
+        consumeOffer(sb, offer, offerAmount, stepAmount, ownerGives)
+        return CONTINUE if offer.fully_consumed() else STOP
 
     # Determine debt direction for transfer fee calculation
-    if prevStep_:
-        prevStepDebtDir = prevStep_.debtDirection(sb, "reverse")
-    else:
-        prevStepDebtDir = "issues"
-
+    prevDir = prevStep_.debtDirection(sb, REVERSE) if prevStep_ else ISSUES
     # Iterate through offers (both CLOB and AMM)
-    removedOffers, offersConsumed = forEachOffer(sb, afView, prevStepDebtDir, eachOffer)
-
-    offersUsed_ = offersConsumed
-    # Multiple steps might mark the same offers for removal
-    offersToRemove.union(removedOffers)
-
+    removed, offersUsed = forEachOffer(sb, prevDir, eachOffer)
+    offersToRemove.union(removed)
     # Check if we consumed too many offers. Prevents DoS attacks where malicious actors
     # create many tiny unfunded offers to force expensive iteration
-    if offersConsumed >= kMaxOffersToConsume:
+    if offersUsed >= kMaxOffersToConsume:
         # Use the liquidity we found but mark this path as "dry" so it won't be tried
         # again in future iterations of this payment
         inactive_ = True
-
-    # Handle edge cases with remainingOut
-    if remainingOut < 0:
-        log.error("BookStep remainingOut < 0: " + str(remainingOut))
-        cache_ = (0, 0)
-        return (0, 0)
-    elif remainingOut == 0:
-        # Due to normalization, remainingOut can be zero without result.out == out
-        # Force result.out == out for this case
-        result.out = out
-
-    cache_ = (result.in, result.out)
-
-    return (result.in, result.out)
+    cache_ = result
+    return result
 ```
 
 
@@ -1177,64 +1093,32 @@ def revImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
 ### 5.2.1. `fwdImp` Pseudo-Code
 
 ```python
-def fwdImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
-           in: TIn) -> (in: TIn, out: TOut):
-    assert cache_ is not None
-
-    # Initialize result
-    result = (in=0, out=0)
+def fwdImp(sb, in):
+    assert cache_ is set
     remainingIn = in
-
-    # Multisets for accumulating amounts (implementation uses flat_multiset)
-    savedInputs = []
-    savedOutputs = []
-
-    # Track last output iterator for coherence check (actual implementation uses iterator)
-    lastOutputIter = None
+    result = (in=0, out=0)
+    savedInputs, savedOutputs = [], []
+    lastOutput = None
 
     # Callback invoked by forEachOffer for each offer in the book
-    def eachOffer(offer, offerAmount, stepAmount, ownerGives,
-                  transferRateIn, transferRateOut):
-        nonlocal result, remainingIn, lastOutputIter
-
-        assert cache_ is not None
-
+    def eachOffer(offer, offerAmount, stepAmount, ownerGives, rateIn, rateOut):
         # We've consumed all available input, nothing left to spend
         if remainingIn <= 0:
-            return False
-
-        processMore = True
-        adjustedOfferAmount = offerAmount
-        adjustedStepAmount = stepAmount
-        adjustedOwnerGives = ownerGives
-
+            return STOP
         # Check if we can consume entire offer with remaining input
         if stepAmount.in <= remainingIn:
             # Consume entire offer
             savedInputs.append(stepAmount.in)
-            lastOutputIter = savedOutputs.append(stepAmount.out)  # Returns iterator
-
-            result = (in=sum(savedInputs), out=sum(savedOutputs))
-            # Consume the offer even if stepAmount.in == remainingIn
-            processMore = True
+            lastOutput = savedOutputs.append(stepAmount.out)
+            result = (sum(savedInputs), sum(savedOutputs))
+            keepGoing = CONTINUE
         else:
             # Consume partial offer - limit by remaining input
-            limitStepIn(
-                offer,
-                adjustedOfferAmount,
-                adjustedStepAmount,
-                adjustedOwnerGives,
-                transferRateIn,
-                transferRateOut,
-                remainingIn
-            )
-
+            limitStepIn(offer, offerAmount, stepAmount, ownerGives, rateIn, rateOut, remainingIn)
             savedInputs.append(remainingIn)
-            lastOutputIter = savedOutputs.append(adjustedStepAmount.out)  # Returns iterator
-            result.out = sum(savedOutputs)
-            result.in = in
-
-            processMore = False
+            lastOutput = savedOutputs.append(stepAmount.out)
+            result.out = sum(savedOutputs); result.in = in
+            keepGoing = STOP
 
         # Forward/Reverse coherence check
         # The step produced more output in the forward pass than the reverse pass
@@ -1243,86 +1127,40 @@ def fwdImp(sb: PaymentSandbox, afView: ApplyView, offersToRemove: &List[Offer],
         # forward step, then consume the input provided in the forward step and produce
         # the output requested from the reverse step.
         if result.out > cache_.out and result.in <= cache_.in:
-            lastOutputAmount = savedOutputs[lastOutputIter]
-            savedOutputs.erase(lastOutputIter)
-            remainingOutNeeded = cache_.out - sum(savedOutputs)
-
-            # Recalculate with reverse limiting (limit by output instead of input)
-            offerAmountRev = offerAmount
-            stepAmountRev = stepAmount
-            ownerGivesRev = ownerGives
-
-            limitStepOut(
-                offer,
-                offerAmountRev,
-                stepAmountRev,
-                ownerGivesRev,
-                transferRateIn,
-                transferRateOut,
-                remainingOutNeeded
-            )
-
-            # Check if reverse calculation needs exactly our remaining input
-            if stepAmountRev.in == remainingIn:
+            savedOutputs.remove(lastOutput)
+            neededOut = cache_.out - sum(savedOutputs)
+            revOffer, revStep, revOwner = offerAmount, stepAmount, ownerGives
+            limitStepOut(offer, revOffer, revStep, revOwner, rateIn, rateOut, neededOut)
+            if revStep.in == remainingIn:
                 # Perfect match - use cached output
-                result.in = in
-                result.out = cache_.out
-
-                # Ensures clean state with exact values
-                savedInputs.clear()
-                savedInputs.append(result.in)
-                savedOutputs.clear()
-                savedOutputs.append(result.out)
-
-                adjustedOfferAmount = offerAmountRev
-                adjustedStepAmount.in = remainingIn
-                adjustedStepAmount.out = remainingOutNeeded
-                adjustedOwnerGives = ownerGivesRev
+                result = (in, cache_.out)
+                savedInputs, savedOutputs = [in], [cache_.out]
+                offerAmount, ownerGives = revOffer, revOwner
+                stepAmount = (in=remainingIn, out=neededOut)
             else:
                 # Can't match exactly - this is (likely) a problem case
                 # and will be caught with later checks. Restore last output.
-                savedOutputs.append(lastOutputAmount)
+                savedOutputs.append(lastOutput)
 
         remainingIn = in - result.in
-
         # Consume the offer
-        consumeOffer(sb, offer, adjustedOfferAmount, adjustedStepAmount, adjustedOwnerGives)
-
-        return processMore or offer.fully_consumed()
+        consumeOffer(sb, offer, offerAmount, stepAmount, ownerGives)
+        return keepGoing or offer.fully_consumed()
 
     # Determine debt direction for transfer fee calculation
-    if prevStep_:
-        prevStepDebtDir = prevStep_.debtDirection(sb, "forward")
-    else:
-        prevStepDebtDir = "issues"
-
+    prevDir = prevStep_.debtDirection(sb, FORWARD) if prevStep_ else ISSUES
     # Iterate through offers (both CLOB and AMM)
-    removedOffers, offersConsumed = forEachOffer(sb, afView, prevStepDebtDir, eachOffer)
-
-    offersUsed_ = offersConsumed
-    # Multiple steps might mark the same offers for removal
-    offersToRemove.union(removedOffers)
-
+    removed, offersUsed = forEachOffer(sb, prevDir, eachOffer)
+    offersToRemove.union(removed)
     # Check if we consumed too many offers. Prevents DoS attacks
-    if offersConsumed >= kMaxOffersToConsume:
-        # Use the liquidity but mark strand as inactive (dry)
+    if offersUsed >= kMaxOffersToConsume:
         inactive_ = True
-
-    # Handle edge cases with remaining input
-    if remainingIn < 0:
-        # Something went very wrong
-        log.error("BookStep remainingIn < 0: " + str(remainingIn))
-        cache_ = (0, 0)
-        return (0, 0)
-    elif remainingIn == 0:
+    if remainingIn == 0:
         # Due to normalization, remainingIn can be zero without result.in == in
         # Force result.in == in for this case
         result.in = in
-
-    # Update cache with actual result
-    cache_ = (result.in, result.out)
-
-    return (result.in, result.out)
+    cache_ = result
+    return result
 ```
 
 ## 5.3. `forEachOffer`
@@ -1350,155 +1188,98 @@ The callback determines how much liquidity to consume from each offer and whethe
 ### 5.3.1. `forEachOffer` Pseudo-Code
 
 ```python
-def forEachOffer(sb: PaymentSandbox, afView: ApplyView,
-                 prevStepDebtDirection: DebtDirection,
-                 callback: Callable) -> (removedOffers: Set[uint256], offersConsumed: int):
+def forEachOffer(sb, prevStepDir, callback):
     # Calculate transfer rates for this book step.
     # These rates determine fees charged when crossing offers.
 
     # Input transfer rate: only charged when previous step redeems (pulls from issuer)
-    transferRateIn = rate(sb, book_.in, strandDst_).value if redeems(prevStepDebtDirection) else QUALITY_ONE
-
-    # Output transfer rate: charged when ownerPaysTransferFee_ is set
-    # Code comment: Always charge the transfer fee, even if the owner is the issuer
-    transferRateOut = rate(sb, book_.out, strandDst_).value if ownerPaysTransferFee_ else QUALITY_ONE
-
-    counter = StepCounter(1000)
-    offers = FlowOfferStream(sb, afView, book_, sb.parentCloseTime(), counter)
-
+    rateIn  = transferRate(book_.in)  if redeems(prevStepDir) else QUALITY_ONE
+    # Output transfer rate: charged when ownerPaysTransferFee_ is set.
+    # Always charge the transfer fee, even if the owner is the issuer.
+    rateOut = transferRate(book_.out) if ownerPaysTransferFee_ else QUALITY_ONE
+    offers = FlowOfferStream(sb, book_)
+    tipQuality = None
     offerAttempted = False
-    ofrQ = None  # Tracks quality of first offer attempted in this iteration
 
     # Lambda to execute each offer (both CLOB and AMM)
     def execOffer(offer):
-        nonlocal offerAttempted, ofrQ
-
-        # Code comment: Note that offer.quality() returns a (non-optional) Quality.
-        # So ofrQ is always safe to use below this point in the lambda.
-        if not ofrQ:
-            ofrQ = offer.quality()
-        elif ofrQ != offer.quality():
+        if tipQuality is None:
+            tipQuality = offer.quality()
+        elif tipQuality != offer.quality():
             # Stop when quality changes - only process same quality offers per iteration
-            return False
-
+            return STOP
         # Handle self-crossing (offer crossing only, not payments).
         # Removes old offers when a user's new offer would cross their existing one.
-        if limitSelfCrossQuality(strandSrc_, strandDst_, offer, ofrQ, offers, offerAttempted):
-            return True
+        if is_self_cross(offer):
+            return CONTINUE
 
-        assetIn = offer.assetIn()
-        assetOut = offer.assetOut()
-        isAssetInMPT = assetIn.holds<MPTIssue>()
-        isAssetOutMPT = assetOut.holds<MPTIssue>()
         owner = offer.owner()
-
-        # Code comment: Create MPToken for the offer's owner. No need to check
-        # for the reserve since the offer is removed if it is consumed.
-        # Therefore, the owner count remains the same.
-        if isAssetInMPT:
-            if checkCreateMPT(sb, assetIn.get<MPTIssue>(), owner) != tesSUCCESS:
-                return True
-
-        # Code comment: It shouldn't matter from auth point of view whether it's sb
-        # or afView. Amendment guard this change just in case.
-        applyView = sb if sb.rules().enabled(featureMPTokensV2) else afView
-
-        # Code comment: Make sure offer owner has authorization to own Assets from issuer
-        # if IOU. An account can always own XRP or their own Assets.
-        # If MPT then MPTDEX should be allowed.
-        # requireAuth uses applyView; the MPT DEX check (checkMPTDEX) uses sb.
-        if (requireAuth(applyView, assetIn, owner) != tesSUCCESS or
-            not checkMPTDEX(sb, owner)):
-            # Code comment: Offer owner not authorized to hold IOU/MPT from issuer.
+        assetIn, assetOut = offer.assetIn(), offer.assetOut()
+        # Create MPToken for the offer's owner. No need to check for the reserve since the
+        # offer is removed if it is consumed, so the owner count remains the same.
+        if assetIn is MPT and checkCreateMPT(sb, assetIn, owner) != tesSUCCESS:
+            return CONTINUE
+        # Make sure offer owner has authorization to own Assets from issuer if IOU. An account
+        # can always own XRP or their own Assets. If MPT then MPTDEX should be allowed.
+        if not requireAuth(assetIn, owner) or not checkMPTDEX(sb, owner):
+            # Offer owner not authorized to hold IOU/MPT from issuer.
             # Remove this offer even if no crossing occurs.
-            if offer.key():
-                offers.permRmOffer(offer.key())
+            offers.permRemove(offer)
             if not offerAttempted:
-                # Code comment: Change quality only if no previous offers were tried.
-                ofrQ = None
-            # Code comment: Returning true causes offers.step() to delete the offer.
-            return True
-
+                # Change quality only if no previous offers were tried.
+                tipQuality = None
+            return CONTINUE  # causes offers.step() to delete the offer
         if not checkQualityThreshold(offer.quality()):
-            return False
+            return STOP
 
-        # Calculate rates using offer's adjustRates method which handles:
-        # - CLOB offers (TOffer): Returns rates unchanged
-        # - AMM offers: Returns {offerInRate, QUALITY_ONE} because AMM never pays transfer fee on output
-        ofrInRate, ofrOutRate = offer.adjustRates(
-            getOfrInRate(prevStep_, owner, transferRateIn),
-            getOfrOutRate(prevStep_, owner, strandDst_, transferRateOut)
-        )
-
+        # adjustRates handles CLOB offers (rates unchanged) and AMM offers (returns
+        # (offerInRate, QUALITY_ONE) because AMM never pays a transfer fee on output).
+        rIn, rOut = offer.adjustRates(getOfrInRate(prevStep_, owner, rateIn),
+                                      getOfrOutRate(prevStep_, owner, strandDst_, rateOut))
         ofrAmt = offer.amount()
-
         # stpAmt represents what the step consumes/produces (includes transfer fees)
-        stpAmt = TAmounts(
-            mulRatio(ofrAmt.in, ofrInRate, QUALITY_ONE, roundUp=True),
-            ofrAmt.out
-        )
-
+        stpAmt = (in = roundUp(ofrAmt.in * rIn / QUALITY_ONE), out = ofrAmt.out)
         # What the offer owner actually gives (output amount adjusted for transfer fee)
-        ownerGives = mulRatio(ofrAmt.out, ofrOutRate, QUALITY_ONE, roundUp=False)
+        ownerGives = roundDown(ofrAmt.out * rOut / QUALITY_ONE)
 
-        # For funded offers (owner is issuer), use ownerGives directly.
-        # Otherwise, check owner's actual balance.
+        # For funded offers (owner is issuer), use ownerGives directly. Otherwise check the
+        # owner's actual balance, and limit the offer if the owner doesn't have enough funds.
         funds = ownerGives if offer.isFunded() else offers.ownerFunds()
-
-        # Limit offer if owner doesn't have enough funds (CLOB offers only)
         if funds < ownerGives:
-            # We already know offer.owner() != offer.issueOut().account
             ownerGives = funds
-            stpAmt.out = mulRatio(ownerGives, QUALITY_ONE, ofrOutRate, roundUp=False)
+            stpAmt.out = roundDown(ownerGives * QUALITY_ONE / rOut)
+            # Rounding down here prevents order book blocking (an amendment-guarded change).
+            ofrAmt = offer.limitOut(ofrAmt, stpAmt.out)
+            stpAmt.in = roundUp(ofrAmt.in * rIn / QUALITY_ONE)
 
-            # Code comment: It turns out we can prevent order book blocking by (strictly)
-            # rounding down the ceilOutStrict() result. This adjustment changes
-            # transaction outcomes, so it must be made under an amendment.
-            ofrAmt = offer.limitOut(ofrAmt, stpAmt.out, roundUp=False)
-
-            stpAmt.in = mulRatio(ofrAmt.in, ofrInRate, QUALITY_ONE, roundUp=True)
-
-        # Code comment: Limit offer's input if MPT, BookStep is the first step (an issuer
-        # is making a cross-currency payment), and this offer is not owned
-        # by the issuer. Otherwise, OutstandingAmount may overflow.
-        issuer = assetIn.getIssuer()
-        if isAssetInMPT and not prevStep_ and owner != issuer:
-            available = accountFunds(sb, issuer, assetIn, FreezeHandling::IgnoreFreeze, AuthHandling::IgnoreAuth)
+        # Limit offer's input if MPT, BookStep is the first step (an issuer is making a
+        # cross-currency payment), and this offer is not owned by the issuer. Otherwise,
+        # OutstandingAmount may overflow.
+        if assetIn is MPT and not prevStep_ and owner != assetIn.issuer:
+            available = accountFunds(sb, assetIn.issuer, assetIn)
             if stpAmt.in > available:
-                limitStepIn(offer, ofrAmt, stpAmt, ownerGives, ofrInRate, ofrOutRate, available)
+                limitStepIn(offer, ofrAmt, stpAmt, ownerGives, rIn, rOut, available)
 
         offerAttempted = True
-        return callback(offer, ofrAmt, stpAmt, ownerGives, ofrInRate, ofrOutRate)
+        return callback(offer, ofrAmt, stpAmt, ownerGives, rIn, rOut)
 
-    # Code comment: At any payment engine iteration, AMM offer can only be consumed once.
-    def tryAMM(lobQuality):
+    # At any payment engine iteration, an AMM offer can only be consumed once.
+    def tryAMM(clobQuality):
         # AMM doesn't support permissioned DEX yet
         if book_.domain:
-            return True
-
-        # Code comment: If offer crossing then use either LOB quality or nullopt
-        # to prevent AMM being blocked by a lower quality LOB.
-        if sb.rules().enabled(fixAMMv1_1) and lobQuality:
-            qualityThreshold = qualityThreshold(lobQuality)
-        else:
-            qualityThreshold = lobQuality
-
-        ammOffer = getAMMOffer(sb, qualityThreshold)
-        return not ammOffer or execOffer(ammOffer)
+            return CONTINUE
+        ammOffer = getAMMOffer(sb, clobQuality)
+        return STOP if (ammOffer and execOffer(ammOffer) == STOP) else CONTINUE
 
     # Main loop: try AMM first, then iterate through CLOB offers
     if offers.step():
-        if tryAMM(offers.tip().quality()):
-            while True:
-                if not execOffer(offers.tip()):
-                    break
-                if not offers.step():
-                    break
+        if tryAMM(offers.tip().quality()) == CONTINUE:
+            while execOffer(offers.tip()) == CONTINUE and offers.step():
+                pass
     else:
-        # Code comment: Might have AMM offer if there are no CLOB offers.
+        # Might have AMM offer if there are no CLOB offers.
         tryAMM(None)
-
-    return (offers.permToRemove(), counter.count())
+    return (offers.permToRemove(), offersConsumed)
 ```
 
 ### 5.3.2. Transfer Rate Helper Functions
@@ -1519,11 +1300,11 @@ These functions are called in `forEachOffer` when processing each offer, and the
 
 ```python
 # BookPaymentStep version (always returns input unchanged)
-def getOfrInRate(prevStep, offerOwner, transferRate) -> Rate:
+def getOfrInRate(prevStep, offerOwner, transferRate):
     return transferRate
 
 # BookOfferCrossingStep version (conditionally waives fee)
-def getOfrInRate(prevStep, offerOwner, transferRate) -> Rate:
+def getOfrInRate(prevStep, offerOwner, transferRate):
     # Waive fee if offer owner is previous step's account
     # (prevents charging owner to send to themselves)
     if prevStep and prevStep.account() == offerOwner:
@@ -1535,11 +1316,11 @@ def getOfrInRate(prevStep, offerOwner, transferRate) -> Rate:
 
 ```python
 # BookPaymentStep version (always returns input unchanged)
-def getOfrOutRate(prevStep, offerOwner, strandDst, transferRate) -> Rate:
+def getOfrOutRate(prevStep, offerOwner, strandDst, transferRate):
     return transferRate
 
 # BookOfferCrossingStep version (conditionally waives fee)
-def getOfrOutRate(prevStep, offerOwner, strandDst, transferRate) -> Rate:
+def getOfrOutRate(prevStep, offerOwner, strandDst, transferRate):
     # Waive fee if prevStep is a BookStep and offer owner is strand destination
     # (prevents charging owner to receive their own funds)
     if prevStep and prevStep.bookStepBook() and strandDst == offerOwner:
@@ -1599,77 +1380,29 @@ The sizing strategy branches based on `ammContext_.multiPath()`:
 The pseudocode assumes all relevant amendments are enabled (fixAMMv1_1, fixAMMv1_2, fixAMMOverflowOffer). The actual implementation includes fallback behavior for pre-amendment ledgers. See source code for complete amendment-conditional logic.
 
 ```python
-def getOffer(view: ReadView, clobQuality: Optional[Quality]) -> Optional[AMMOffer]:
-    # Holds in and out
-    amounts = {}
-    
-    # ammContext is instance variable
+def getOffer(view, clobQuality):
     if ammContext.maxItersReached():
-        return None  # AMM liquidity already consumed in 30 iterations (kMaxIterations cap)
-
-    # Fetch current pool balances from ledger
-    #   balances.in:  Amount of input currency in the pool (what taker pays to pool)
-    #   balances.out: Amount of output currency in the pool (what taker gets from pool)
+        return None                                         # AMM already used in 30 iterations
     balances = fetchBalances(view)
     if not balances:
         return None
-    
-    # Initial balances represent the state when AMMLiquidity was created
-    initialBalances = fetchInitialBalances()
-    
-    spotPriceQuality = balances.in / balances.out
-
-    if clobQuality:
-        # Quality class overrides <= operator to check lhs.m_value >= rhs.m_value
-        # So "spotPriceQuality <= clobQuality" means AMM quality is worse or equal
-        if spotPriceQuality <= clobQuality or withinRelativeDistance(spotPriceQuality, clobQuality, 1e-7):
-            return None  # AMM can't compete
+    if clobQuality and spot_price(balances) not_better_than clobQuality:
+        return None                                         # AMM's best case can't beat CLOB
 
     if ammContext.multiPath():
-        iteration = ammContext.ammIters()
-
-        # Initial size = 0.025% of pool (5/20000)
-        offerIn = initialBalances.in * (5 / 20000)
-
-        # Calculate output for initial size (with trading fee)
-        baseOut = swapAssetIn(initialBalances, offerIn, tradingFee) # ../amms/helpers.md#311-swapassetin
-
-        # Scale by Fibonacci number for this iteration
-        fibonacci = [1, 1, 2, 3, 5, 8, 13, 21 ... 832040]
-        fibMultiplier = fibonacci[iteration]
-        offerOut = baseOut * fibMultiplier
-
-        # Calculate required input to produce scaled output
-        offerIn = swapAssetOut(balances, offerOut, tradingFee) # ../amms/helpers.md#312-swapassetout
-
-        amounts = {in: offerIn, out: offerOut}
+        # Small base (0.025% of pool) scaled by the Fibonacci number for this iteration.
+        out = swapAssetIn(initialBalances, 0.00025 * initialBalances.in, fee) * fib[iteration]
+        amounts = (in = swapAssetOut(balances, out, fee), out = out)
         if clobQuality and Quality(amounts) < clobQuality:
-            return None  # Generated offer can't compete with CLOB
+            return None
+    elif clobQuality:
+        # Single path: size so the post-swap spot price exactly matches CLOB (else max offer).
+        amounts = changeSpotPriceQuality(balances, clobQuality, fee) or maxOffer_if_better(clobQuality)
+        if not amounts:
+            return None
     else:
-        if clobQuality:
-            amounts = changeSpotPriceQuality(balances, clobQuality, tradingFee) # ../amms/helpers.md#314-changespotpricequality
-            
-            if not amounts:
-                # Return the biggest size this AMM can provide
-                maxAMMOffer = maxOffer(balances, rules)
-                
-                # If maxAMMOffer provides better quality than clobQuality
-                if maxAMMOffer and Quality(maxAMMOffer.amounts) > clobQuality:
-                    amounts = maxAMMOffer.amounts
-                else:
-                    return None  # No competitive AMM offer possible
-        else:
-            # No CLOB to compete against, offer maximum liquidity
-            # With fixAMMOverflowOffer: 99% of pool balance
-            amounts = maxOffer(balances, rules)
-
-    offerQuality = amounts.in / amounts.out
-    return AMMOffer(
-        ammLiquidity=self,
-        amounts=amounts,
-        balances=balances,
-        quality=offerQuality
-    )
+        amounts = maxOffer(balances)                        # no CLOB competition: offer the most
+    return AMMOffer(amounts, balances, quality = amounts.in / amounts.out)
 ```
 
 #### 5.4.3.2. Multi-Path Mode: Fibonacci Sequence Sizing
@@ -1750,30 +1483,25 @@ The `qualityUpperBound` method[^bookstep-qualityupperbound-impl] for BookStep re
 
 [^bookstep-qualityupperbound-impl]: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L572-L586)
 
-The method calls the polymorphic `adjustQualityWithFees()` function, which has different implementations for [payment steps](#554-adjustqualitywithfees---bookpaymentstep-implementation) versus [offer crossing steps](#555-adjustqualitywithfees---bookoffercrossingstep-implementation).
+The method calls the polymorphic `adjustQualityWithFees()` function, which has different implementations for [payment steps](#553-adjustqualitywithfees---bookpaymentstep-implementation) versus [offer crossing steps](#554-adjustqualitywithfees---bookoffercrossingstep-implementation).
 
 #### 5.5.1.1. `qualityUpperBound` Pseudo-Code
 
 ```python
-def qualityUpperBound(prevStepDir: DebtDirection) -> (q: Quality, dir: DebtDirection):
+def qualityUpperBound(prevStepDir):
     # Determine debt direction for this step
-    dir = debtDirection(StrandDirection.forward)
+    dir = debtDirection(FORWARD)
 
     # Get the best available offer quality (AMM or CLOB), if any
     res = tipOfferQuality()
     if not res:
-        return {q: None, dir: dir}
-
-    tipQuality = res.quality
-    offerType = res.type  # AMM or CLOB
+        return (None, dir)
 
     # Determine if transfer fee should be waived
-    waiveFee: bool = offerType == "AMM"
+    waiveFee = (res.type == AMM)
 
     # Adjust quality with transfer fees (polymorphic call)
-    q = adjustQualityWithFees(tipQuality, prevStepDir, waiveFee, offerType)
-
-    return {q: q, dir: dir}
+    return (adjustQualityWithFees(res.quality, prevStepDir, waiveFee), dir)
 ```
 
 ### 5.5.2. `tipOfferQuality` Helper Function
@@ -1805,7 +1533,7 @@ For payments, apply transfer fees conditionally based on debt direction and offe
 #### 5.5.3.1. `adjustQualityWithFees` Pseudo-Code
 
 ```python
-def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
+def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee):
     def rate(asset):
         if isXRP(asset):
             return QUALITY_ONE
@@ -1822,14 +1550,13 @@ def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
     trIn = rate(book_.in) if redeems(prevStepDir) else QUALITY_ONE
 
     # Output transfer rate: charged when owner pays and fee not waived
-    if ownerPaysTransferFee_ and waiveFee == WaiveTransferFee.No:
+    if ownerPaysTransferFee_ and not waiveFee:
         trOut = rate(book_.out)
     else:
         trOut = QUALITY_ONE
 
     # Compose transfer fees with offer quality
-    feeQuality = Quality(getRate(trOut, trIn))
-    return composedQuality(feeQuality, ofrQ)
+    return composedQuality(getRate(trOut, trIn), ofrQ)
 ```
 
 ### 5.5.4. `adjustQualityWithFees` - BookOfferCrossingStep Implementation
@@ -1845,7 +1572,7 @@ The quality adjustment logic:
 #### 5.5.4.1. `adjustQualityWithFees` Pseudo-Code
 
 ```python
-def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
+def adjustQualityWithFees(ofrQ, prevStepDir, offerType):
     # Offer crossing doesn't charge transfer fee when offer owner is strand destination.
     # For qualityUpperBound to be an upper bound, we assume no fee is charged.
 
@@ -1855,7 +1582,7 @@ def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
 
     # CLOB offers and multi-path AMM offers: no adjustment needed
     # Multi-path AMM offers already account for quality degradation through Fibonacci sizing
-    if offerType == OfferType.CLOB or (ammLiquidity_ and ammLiquidity_.multiPath()):
+    if offerType == CLOB or (ammLiquidity_ and ammLiquidity_.multiPath()):
         return ofrQ
 
     # Single-path AMM offers: must factor in transfer-in rate
@@ -1875,8 +1602,7 @@ def adjustQualityWithFees(ofrQ, prevStepDir, waiveFee, offerType) -> Quality:
     trIn = rate(book_.in) if redeems(prevStepDir) else QUALITY_ONE
     trOut = QUALITY_ONE  # AMM doesn't pay transfer fee on output
 
-    feeQuality = Quality(getRate(trOut, trIn))
-    return composedQuality(feeQuality, ofrQ)
+    return composedQuality(getRate(trOut, trIn), ofrQ)
 ```
 
 ## 5.6. `check` Implementation
