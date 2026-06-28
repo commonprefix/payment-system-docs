@@ -17,9 +17,9 @@
 
 
 > [!IMPORTANT]
-> N.B.: Transaction processing in `rippled` is a complex system. This document presents a simplified view focused on providing sufficient context for understanding payment-related documentation. It covers the essential concepts and mechanisms without exhaustively detailing every aspect of transaction processing.
+> N.B.: Transaction processing in `xrpld` is a complex system. This document presents a simplified view focused on providing sufficient context for understanding payment-related documentation. It covers the essential concepts and mechanisms without exhaustively detailing every aspect of transaction processing.
 
-Transactions are the mechanism for modifying the XRP Ledger state. New transactions representing user intent enter the network exclusively through RPC submission - clients submit transactions via commands like `submit` or `submit_multisigned` to a `rippled` server. Once a transaction passes initial validation, it is relayed to other nodes through peer-to-peer propagation via `TMTransaction` protocol messages.
+Transactions are the mechanism for modifying the XRP Ledger state. New transactions representing user intent enter the network exclusively through RPC submission - clients submit transactions via commands like `submit` or `submit_multisigned` to a `xrpld` server. Once a transaction passes initial validation, it is relayed to other nodes through peer-to-peer propagation via `TMTransaction` protocol messages.
 
 Every transaction, regardless of how it arrived at a node, goes through the same three-phase processing pipeline: preflight (static validation), preclaim (ledger-based validation), and doApply (execution). All transaction types inherit from the `Transactor` base class, which provides the common infrastructure for these validation and execution stages. Both RPC-submitted and peer-propagated transactions converge at `processTransaction`, which orchestrates the preflight, preclaim, and doApply stages.
 
@@ -52,9 +52,8 @@ classDiagram
     class Transactor {
         <<abstract>>
         #ApplyContext ctx_
-        #AccountID account_
-        #XRPAmount mPriorBalance
-        #XRPAmount mSourceBalance
+        #AccountID accountID_
+        #XRPAmount preFeeBalance_
         +operator()() ApplyResult
         +apply() TER
         +doApply()* TER
@@ -70,19 +69,19 @@ classDiagram
         +doApply() TER
     }
 
-    class CreateOffer {
+    class OfferCreate {
         +preflight()$ NotTEC
         +preclaim()$ TER
         +doApply() TER
     }
 
-    class CancelOffer {
+    class OfferCancel {
         +preflight()$ NotTEC
         +preclaim()$ TER
         +doApply() TER
     }
 
-    class SetTrust {
+    class TrustSet {
         +preflight()$ NotTEC
         +preclaim()$ TER
         +doApply() TER
@@ -198,9 +197,9 @@ classDiagram
     STTx --|> STObject : inherits
     STTx --> Transactor : processed by
     Transactor <|-- Payment
-    Transactor <|-- CreateOffer
-    Transactor <|-- CancelOffer
-    Transactor <|-- SetTrust
+    Transactor <|-- OfferCreate
+    Transactor <|-- OfferCancel
+    Transactor <|-- TrustSet
     Transactor <|-- AMMCreate
     Transactor <|-- AMMDeposit
     Transactor <|-- AMMWithdraw
@@ -230,10 +229,11 @@ The table below shows all functions called during each phase. The "Implemented B
 | **Preflight** | `invokePreflight<T>()`        | Transactor                | Orchestrates preflight phase: checks tx type feature, calls other checks |
 |               | `checkExtraFeatures()`        | Transactor (overridable)  | Check if optional fields require specific amendments                     |
 |               | `preflight1()`                | Transactor                | Basic validation (account, fee, flags) - calls `preflight0()`            |
+|               | `preflightUniversal()`        | Transactor                | Cross-cutting amount validation (gated by `fixCleanup3_2_0`)             |
 |               | `preflight()`                 | Derived                   | **Required override** - transaction-specific static validation           |
 |               | `preflight2()`                | Transactor                | Signature validation                                                     |
 |               | `preflightSigValidated()`     | Transactor (overridable)  | Optional post-signature validation                                       |
-| **Preclaim**  | `invoke_preclaim()`           | applySteps.cpp            | Orchestrates preclaim phase                                              |
+| **Preclaim**  | `invokePreclaim()`            | applySteps.cpp            | Orchestrates preclaim phase                                              |
 |               | `checkSeqProxy()`             | Transactor                | Validate sequence number or ticket                                       |
 |               | `checkPriorTxAndLastLedger()` | Transactor                | Check prior transaction and last ledger sequence                         |
 |               | `checkPermission()`           | Transactor                | Verify account permissions                                               |
@@ -243,7 +243,7 @@ The table below shows all functions called during each phase. The "Implemented B
 | **Apply**     | `doApply()`                   | applySteps.cpp | Orchestrates apply phase                                                 |
 |               | `operator()()`                | Transactor     | Entry point, exception handling                                          |
 |               | `apply()`                     | Transactor     | Orchestrates doApply flow                                                |
-|               | `preCompute()`                | Transactor     | Initialize balances                                                      |
+|               | `preCompute()`                | Transactor     | Per-transaction setup (validates account)                                |
 |               | `consumeSeqProxy()`           | Transactor     | Consume sequence or delete ticket                                        |
 |               | `payFee()`                    | Transactor     | Deduct transaction fee                                                   |
 |               | `doApply()`                   | Derived        | **Required override** - transaction-specific execution                   |
@@ -279,7 +279,7 @@ Preflight validation is orchestrated by `Transactor::invokePreflight<T>()` which
    - Each transaction can override to check if optional fields require specific amendments
    - Called before preflight1, allows early rejection based on amendment rules
    - Example: Payment checks if `sfCredentialIDs` field requires `featureCredentials` amendment
-   - Example: CreateOffer checks if `sfDomainID` field requires `featurePermissionedDEX` amendment
+   - Example: OfferCreate checks if `sfDomainID` field requires `featurePermissionedDEX` amendment
    - Returns `false` (causes `temDISABLED`) if required amendments are not enabled
    - Returns `true` by default (base class implementation)
 
@@ -296,18 +296,23 @@ Preflight validation is orchestrated by `Transactor::invokePreflight<T>()` which
    - Verify `AccountTxnID` and `TicketSequence` are not both present (incompatible)
    - Check `tfInnerBatchTxn` flag validity (requires `featureBatch` amendment)
 
-4. **Derived::preflight()**: Transaction-specific validation (override in derived class)
+4. **preflightUniversal()**: Cross-cutting amount validation (Transactor base class method)
+   - Runs after `preflight1()` and before the derived class's `preflight()`
+   - When the `fixCleanup3_2_0` amendment is enabled, recursively checks every amount field in
+     the transaction (including nested objects and arrays) and returns `temBAD_AMOUNT` if any is malformed
+
+5. **Derived::preflight()**: Transaction-specific validation (override in derived class)
    - Each transaction type implements its own preflight checks
    - Example: Payment verifies amount fields, path structure, etc.
    - Returns `NotTEC` error code or `tesSUCCESS`
 
-5. **preflight2()**: Signature validation (Transactor base class method)
+6. **preflight2()**: Signature validation (Transactor base class method)
    - Check for simulation mode via `preflightCheckSimulateKeys()`
    - Verify signature appears valid (cryptographic check)
    - Validate multi-signature if present
    - Check signature authorization requirements
 
-6. **preflightSigValidated()**: Post-signature validation (Transactor base class method, rarely overridden)
+7. **preflightSigValidated()**: Post-signature validation (Transactor base class method, rarely overridden)
    - Optional checks after signature validation
    - Returns `tesSUCCESS` by default
 
@@ -318,7 +323,7 @@ Preflight validation is orchestrated by `Transactor::invokePreflight<T>()` which
 
 Transactions that fail preflight validation are never added to the ledger. Preflight returns error codes like `tem` (malformed) that indicate fundamental problems with the transaction format. Since preflight does not access ledger state, these failures are detected before the transaction could claim a fee or consume a sequence number. If preflight fails, preclaim is not executed.[^preflight-check]
 
-[^preflight-check]: Preflight result check before preclaim: [`applySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/applySteps.cpp#L375-L376)
+[^preflight-check]: Preflight result check before preclaim: [`applySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/applySteps.cpp#L406-L407)
 
 **Transaction Consequences**:
 
@@ -361,13 +366,13 @@ All checks before and including signature verification must return NotTEC codes.
 
 **Output**: PreclaimResult containing:
 - Transaction result code
-- `likelyToClaimFee` flag (true if tesSUCCESS or tec code)
+- `likelyToClaimFee` flag (true if tesSUCCESS, or a tec code when not a retry)
 - Original context information
 
-Transactions that fail preclaim may or may not be added to the ledger depending on the error code. The `likelyToClaimFee` flag is set to true if the preclaim result is `tesSUCCESS` or a `tec` error code (values >= 100).[^likely-to-claim-fee] Transactions with `tec` errors are added to the ledger, consume the fee, and increment the account's sequence number, even though the transaction's intended operation fails. Other error codes (`tem`, `tef`, `ter`, `tel`) result in the transaction not being added to the ledger.[^doapply-check] This distinction ensures the network is protected from spam (by charging fees for transactions that pass basic validation) while not penalizing users for transactions that fail due to malformation or other non-chargeable issues.
+Transactions that fail preclaim may or may not be added to the ledger depending on the error code. The `likelyToClaimFee` flag is set to true if the preclaim result is `tesSUCCESS`, or a `tec` error code (values >= 100) **when the transaction is not being applied as a retry** (i.e. the `TapRetry` flag is not set).[^likely-to-claim-fee] Transactions with `tec` errors are added to the ledger, consume the fee, and increment the account's sequence number, even though the transaction's intended operation fails. Other error codes (`tem`, `tef`, `ter`, `tel`) result in the transaction not being added to the ledger.[^doapply-check] This distinction ensures the network is protected from spam (by charging fees for transactions that pass basic validation) while not penalizing users for transactions that fail due to malformation or other non-chargeable issues.
 
-[^likely-to-claim-fee]: likelyToClaimFee flag calculation: [`applySteps.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/applySteps.h#L219)
-[^doapply-check]: doApply checks likelyToClaimFee flag: [`applySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/applySteps.cpp#L409-L410)
+[^likely-to-claim-fee]: likelyToClaimFee flag calculation: [`applySteps.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/applySteps.h#L216); the `tec`-and-not-retry rule lives in [`isTecClaimHardFail`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/applySteps.h#L28).
+[^doapply-check]: doApply checks likelyToClaimFee flag: [`applySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/applySteps.cpp#L440-L441)
 
 ## 3.3. DoApply
 
@@ -395,7 +400,7 @@ Transactions that fail preclaim may or may not be added to the ledger depending 
    - Determines if transaction should be applied to ledger
 
 3. **Transactor::apply()** (base class execution):
-   - Calls `preCompute()` to initialize mPriorBalance and mSourceBalance
+   - Calls `preCompute()` to perform per-transaction setup (e.g. validating the account)
    - Calls `consumeSeqProxy()` to consume sequence or delete ticket
    - Calls `payFee()` to deduct transaction fee
    - Updates AccountTxnID if present
@@ -424,7 +429,7 @@ Transaction result codes (TER) are categorized by prefix and meaning:
 | **tes** | 0            | Success                                                                            | Yes         | Yes                |
 | **tec** | 100+         | Claimed fee - failed but fee charged                                               | Yes         | Yes                |
 
-[^tef]: tef characterization from source comments: [`TER.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/TER.h#L136-L147)
+[^tef]: tef characterization from source comments: [`TER.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/TER.h#L143-L154)
 
 # 5. Ledger Views and Sandboxes
 
@@ -572,6 +577,6 @@ else
     sbCancel.apply(ctx_.rawView());
 ```
 
-[^conditional-atomicity]: Conditional atomicity pattern in CreateOffer: [`CreateOffer.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/CreateOffer.cpp#L962-L979)
+[^conditional-atomicity]: Conditional atomicity pattern in OfferCreate: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L969-L990)
 
-[^balanceHook]: Balance hook description from source comments: [`ReadView.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/ledger/ReadView.h#L153-L157)
+[^balanceHook]: Balance hook description from source comments: [`ReadView.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/ledger/ReadView.h#L149-L153)

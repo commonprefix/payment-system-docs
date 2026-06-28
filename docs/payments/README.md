@@ -30,10 +30,10 @@ A Payment transaction can operate in different modes:
 
 1. [Direct XRP Payment](#41-direct-xrp-payment-execution): Simple transfer of XRP from one account to another
 2. [Cross-Currency Payment](#42-cross-currency-payment-execution): Converting one currency to another through intermediary steps, using paths through the decentralized exchange. With the [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment, cross-currency payments support all combinations of XRP, tokens, and MPTs.
-3. Since [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2), MPT->MPT payments are using the cross-currency payment execution. Please see [MPT Payment Execution](../mpts/README.md#4-mpt-payment-execution) for a description of MPT transfer mechanics. Before it was moved to cross-currency payment system, Payment transactor completed the steps as outlined in that document manually.   
+3. Since [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2), MPT->MPT payments use the cross-currency payment execution path. See [MPT Payment Execution](../mpts/README.md#4-mpt-payment-execution) for a description of MPT transfer mechanics. Before MPTokensV2, the Payment transactor performed these steps directly rather than through the cross-currency engine.
 
 The payment system uses the path finding algorithm and the Payment Engine to discover the most efficient routes for cross-currency transactions,
-automatically handling currency conversion, fees, and liquidity constraints. Payments can optionally specify a `DomainID` field; when specified, the payment will consume offers only from that domain's order book (domain offers and hybrid offers within that domain). Without a `DomainID`, payments consume only from the open order book (open offers and hybrid offers). See [Domain and Hybrid Offers](../offers/README.md#15-permissioned-dex) and [PermissionedDomains documentation](../permissioned_domains/README.md) for details.
+automatically handling currency conversion, fees, and liquidity constraints. Payments can optionally specify a `DomainID` field; when specified, the payment will consume offers only from that domain's order book (domain offers and hybrid offers within that domain). Without a `DomainID`, payments consume from the open order book (open offers and hybrid offers), not from any domain's order book. See [Domain and Hybrid Offers](../offers/README.md#15-permissioned-dex) and [PermissionedDomains documentation](../permissioned_domains/README.md) for details.
 
 Payments execute either fully or partially (when `tfPartialPayment` flag is set), or fail with an error code if insufficient liquidity exists.
 
@@ -75,7 +75,7 @@ Key flags relevant to payments:
 - `lsfDepositAuth`: Requires authorization for incoming payments (except XRP under specific conditions)
 - `lsfPasswordSpent`: Tracks whether the account has used its one-time
   free [SetRegularKey](https://xrpl.org/docs/references/protocol/transactions/types/setregularkey) transaction. Cleared
-  when the account receives a payment to allow another free regular key change
+  when the account receives a direct XRP payment to allow another free regular key change
 
 ### 2.1.3. Reserves
 
@@ -105,7 +105,7 @@ See [AMM Documentation](../amms/README.md#2-ledger-entries) for complete details
 
 ## 3.1. Payment Transaction
 
-The Payment transaction transfers value from one account to another, supporting [XRP](../glossary.md#xrp), [IOUs](../glossary.md#iou), and [MPTs](../glossary.md#mpt). 
+The Payment transaction transfers value from one account to another, supporting [XRP](../glossary.md#xrp), [IOUs](../glossary.md#iou), and [MPTs](../glossary.md#mpt).
 It can operate as a simple direct transfer or use pathfinding for cross-currency conversions.
 
 Fields are described
@@ -138,37 +138,42 @@ The `sign` and `submit` RPC commands accept a `build_path` parameter that trigge
 When `build_path` is `true`:
 
 - [Pathfinding](../path_finding/README.md) runs automatically using the `path_search_old` configuration value
-- Up to 4 best paths are found and inserted into the `Paths` field (this is hardcoded in `TransactionSign.cpp`)
-- Only works if `Paths` is not already specified
-- Cannot be used for XRP-to-XRP payments
+- Up to 4 best paths are found and inserted into the `Paths` field[^build-path]
+- Rejected if `Paths` is already specified
+- Rejected for XRP-to-XRP payments
+
+[^build-path]: [`TransactionSign.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/TransactionSign.cpp#L315-L321)
 
 ### 3.1.1. Failure Conditions
 
 **Static validation**[^static-validation]
 
-[^static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L53-L62), [`getFlagsMask`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L66-L77), [`preflight`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L81-L245)
+[^static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L86-L93), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L97-L109), [`preflight`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L113-L272)
 
-Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) and [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) is enabled:
+The following preflight failure conditions apply. Cases that depend on a specific amendment are noted inline:
 
 - `temDISABLED`:
-    - transaction contains `sfCredentialIDs` and [Credentials](https://xrpl.org/resources/known-amendments#credentials) amendment is not enabled.
-    - transaction contains `sfDomainID` and [PermissionedDEX](https://xrpl.org/resources/known-amendments#permissioneddex) is not enabled.
+    - transaction contains `sfCredentialIDs` and the [Credentials](https://xrpl.org/resources/known-amendments#credentials) amendment is not enabled.
+    - transaction contains `sfDomainID` and the [PermissionedDEX](https://xrpl.org/resources/known-amendments#permissioneddex) amendment is not enabled.
+    - `Amount` is an MPT and the [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) amendment is not enabled.
 - `temINVALID_FLAG`: transaction flags contain invalid flags for the payment type.
 - `temMALFORMED`:
     - `sfCredentialIDs` array is empty or exceeds maximum size of 8. To leave credential IDs out, leave out the entire field.
     - `sfCredentialIDs` array contains duplicate credential IDs
+    - `sfDomainID` is present but is all zeros. To omit the domain, leave out the entire field. Enforced under the `fixCleanup3_2_0` amendment.[^domainid-zero]
 - `temBAD_AMOUNT`:
     - `Amount` is XRP and mantissa is bigger than `100000000000000000ull`.
     - `SendMax` is XRP and mantissa is bigger than `100000000000000000ull`.[^isLegalNet-sendmax]
     - `SendMax` is specified but is negative or zero.
-    - `Amount` amount is negative or zero.
+    - `Amount` is negative or zero.
     - `DeliverMin` is specified without `tfPartialPayment`.
     - `DeliverMin` is XRP and mantissa is bigger than `100000000000000000ull`, or `DeliverMin` is negative or zero.[^delivermin-checks]
-    - `DeliverMin` currency is different from `Amount` currency.
+    - `DeliverMin` asset (currency and issuer, or MPT issuance) differs from the `Amount` asset.
     - `DeliverMin` is greater than `Amount`.
-- `temBAD_CURRENCY`: either `Amount` or `SendMax` (or the implied source amount) is a non-native asset that uses the XRP currency code.
+    - Any `STAmount` field in the transaction is non-canonical (fails `isLegalNet` or `isLegalMPT`); a universal check applied to all transaction types under the `fixCleanup3_2_0` amendment.[^preflight-universal]
+- `temBAD_CURRENCY`: either `Amount` or `SendMax` (or the implied source amount) is a non-native IOU that uses the XRP currency code, or (with MPTokensV2 enabled) an MPT whose issuer account is all zero.
 - `temDST_NEEDED`: destination account is not specified.
-- `temREDUNDANT`: payment is from account to itself with same currency and no `Paths` field. `Paths` are required because perhaps they will allow arbitrage.
+- `temREDUNDANT`: payment is from account to itself with the same currency or MPT issuance and no `Paths` field. `Paths` are required because perhaps they will allow arbitrage.
 - `temBAD_SEND_XRP_MAX`: XRP->XRP payment specifies `SendMax`.
 - `temBAD_SEND_XRP_PATHS`: XRP->XRP payment specifies `Paths`.
 - `temBAD_SEND_XRP_PARTIAL`: XRP->XRP payment has `tfPartialPayment` flag.
@@ -177,15 +182,17 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 
 **Validation against the ledger view**[^preclaim-validation]
 
-[^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L249-L285), [`preclaim`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L288-L385)
-[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L126)
-[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L216-L238)
+[^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L276-L312), [`preclaim`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L315-L402)
+[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L160)
+[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L247-L266)
+[^domainid-zero]: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L128-L132)
+[^preflight-universal]: [`Transactor.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/Transactor.cpp#L260-L267)
 
 - Destination account does not exist:
     - `tecNO_DST`: payment is not XRP
     - `telNO_DST_PARTIAL`: `tfPartialPayment` flag is set. User cannot fund a new account with a partial payment.
     - `tecNO_DST_INSUF_XRP`: XRP amount is below reserve.
-- `tecDST_TAG_NEEDED` : destination account has `lsfRequireDestTag` flag set and transaction did not specify `DestinationTag` field.
+- `tecDST_TAG_NEEDED`: destination account has `lsfRequireDestTag` flag set and transaction did not specify `DestinationTag` field.
 - `telBAD_PATH_COUNT`:
     - the `Paths` field contains more than 6 paths.
     - any `Path` in `Paths` has more than 8 elements.
@@ -202,20 +209,14 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 
 **Validation during doApply**
 
-**Common validations (all payment types):**
-
-- `tecNO_PERMISSION`: For cross-currency payments, if DepositPreauth amendment is not enabled and destination has `lsfDepositAuth` flag
-
 **Direct XRP Payments:**[^direct-xrp-payment]
 
-[^direct-xrp-payment]: Direct XRP payment execution: [`Payment.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Payment.cpp#L607-L698)
+[^direct-xrp-payment]: Direct XRP payment execution: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L594-L679)
 
 - `tefINTERNAL`: Source account does not exist.
-- `tecUNFUNDED_PAYMENT`: Source account cannot send the payment because doing it would leave it with insufficient funds
-  to cover reserve and pay the fee.
+- `tecUNFUNDED_PAYMENT`: sending the payment would leave the source account below its required reserve. When the source account is the fee payer, it must also be able to cover the fee, which may be drawn from the reserve; in a delegated payment the delegate pays the fee, so it is not charged against the source.
 - `tecNO_PERMISSION`: Destination is a pseudo-account.
-- If [DepositAuth](https://xrpl.org/resources/known-amendments#depositauth) amendment is enabled and destination has
-  `lsfDepositAuth` flag:
+- If the destination has the `lsfDepositAuth` flag set:
     - Payment succeeds if source == destination (paying yourself)
     - Payment succeeds if destination balance <= base reserve AND payment amount <= base reserve (prevents account
       wedging)
@@ -225,8 +226,7 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
 
 **Cross-Currency Payments:**
 
-- If DepositPreauth amendment is enabled and destination has `lsfDepositAuth` flag, deposit preauthorization is verified
-  and may fail with:
+- If the destination has the `lsfDepositAuth` flag set, deposit preauthorization is verified and may fail with:
     - `tecEXPIRED`: Any credential in `sfCredentialIDs` is expired
     - `tecNO_PERMISSION`: Source is not deposit preauthorized by destination (either by account or by credentials)
 - RippleCalc, which is a thin wrapper that calls the [Flow engine](../flow/README.md), is invoked to execute the provided payment paths. Flow may fail during path conversion or execution. See [Flow Validation and Error Codes](../flow/README.md#8-validation-and-error-codes) for complete details on error codes that can be returned during cross-currency payment execution.
@@ -246,7 +246,7 @@ Assuming [MPTokensV1](https://xrpl.org/resources/known-amendments#mptokensv1) an
     - Fields set:
         - `Account`: Destination account ID
         - `Balance`: Payment amount
-        - `Sequence`: Current ledger sequence if DeletableAccounts amendment is enabled, otherwise 1
+        - `Sequence`: the sequence of the ledger in which the account is created
 
 **Cross-Currency Payments:**
 
@@ -256,7 +256,6 @@ See [Flow documentation](../flow/README.md) for detailed mechanics of path execu
 - `AccountRoot` objects are **modified**:
     - Source account: Balance decreased by actual amount consumed
     - Destination account: Balance increased by delivered amount
-    - Destination account (if has `lsfPasswordSpent` flag): Clear the flag
     - Intermediate accounts in payment path: Balances adjusted according to path execution
 
 - `RippleState` objects are **modified**:
@@ -291,10 +290,11 @@ See [Flow documentation](../flow/README.md) for detailed mechanics of path execu
 - `MPTokenIssuance` is **modified**:
   - When source is issuer: `OutstandingAmount` increased by sent amount (issuer minting tokens)
   - When destination is issuer: `OutstandingAmount` decreased by received amount (tokens burned, removed from circulation)
-  - When neither is issuer: `OutstandingAmount` decreased by transfer fee amount (if transfer fee applies; unchanged if no fee or fee is waived, e.g., clawback)
+  - When neither is issuer: `OutstandingAmount` decreased by the transfer fee amount (if the MPT has a transfer fee; unchanged if it has none)
 
 **Important**:
 - The receiver must already have an `MPToken` entry before receiving a payment (unless the receiver is the issuer). If the receiver has no `MPToken` and is not the issuer, the payment fails with `tecNO_AUTH`. Holders create their `MPToken` entries using the `MPTokenAuthorize` transaction.
+- For an MPT that requires authorization (`lsfMPTRequireAuth`), AMM, Vault, and LoanBroker pseudo-accounts are treated as authorized without needing `lsfMPTAuthorized` on their `MPToken` (under the SingleAssetVault or MPTokensV2 amendment). The `MPToken` must still exist.
 - The issuer never has an `MPToken` entry and cannot hold a balance of their own issuance. When MPTs are sent to the issuer, they are burned from circulation by decreasing `OutstandingAmount`.
 
 # 4. Payment Execution Paths
@@ -302,8 +302,8 @@ See [Flow documentation](../flow/README.md) for detailed mechanics of path execu
 All payment types are processed through the Payment transaction but follow different execution paths based on the
 currencies and parameters involved:
 
-- **Direct XRP payments**: Execute simple balance transfers when both `Amount` and `SendMax` (if present) are XRP and no `Paths` are specified
-- **Cross-currency payments**: Invoke the [Flow engine](../flow/README.md) when `SendMax` is specified, `Paths` are provided, or `Amount` is a non-XRP asset.
+- **Direct XRP payments**: Execute simple balance transfers when `Amount` is XRP and no `SendMax` and no `Paths` are specified
+- **Cross-currency payments**: Invoke the [Flow engine](../flow/README.md) when `SendMax` is specified, `Paths` are provided, or `Amount` is an IOU (or an MPT when the MPTokensV2 amendment is enabled).
 - **Direct MPT payments**: Execute MPToken transfers when `Amount` holds an MPT issue and MPTokensV2 amendment is not enabled
 
 The Payment transaction determines which path to take during the `doApply` phase based on these conditions.
@@ -314,13 +314,13 @@ Direct XRP payments are the simplest payment type, transferring XRP directly fro
 
 **When the destination account exists**: The payment decreases the source account's `Balance` by the payment amount and increases the destination account's `Balance` by the same amount. If the destination account has the `lsfPasswordSpent` flag set, it is cleared to allow another free `SetRegularKey` transaction.
 
-**When the destination account does not exist**: A new `AccountRoot` entry is created for the destination with the payment amount as its initial balance. The account's `Sequence` is set to the current ledger sequence (if [DeletableAccounts](https://xrpl.org/resources/known-amendments#deletableaccounts) is enabled) or 1 otherwise. The payment must meet the base reserve requirement (see [Reserves](#213-reserves)), or it fails with `tecNO_DST_INSUF_XRP`.
+**When the destination account does not exist**: A new `AccountRoot` entry is created for the destination with the payment amount as its initial balance. The account's `Sequence` is set to the current ledger sequence. The payment must meet the base reserve requirement (see [Reserves](#213-reserves)), or it fails with `tecNO_DST_INSUF_XRP`.
 
-All validation checks-including reserve requirements, deposit authorization, and destination tags-are performed before execution. See [Failure Conditions](#311-failure-conditions) for complete validation rules.
+All validation checks are performed before execution, including reserve requirements, deposit authorization, and destination tags. See [Failure Conditions](#311-failure-conditions) for complete validation rules.
 
 ## 4.2. Cross-Currency Payment Execution
 
-Cross-currency payments convert one currency to another through intermediary steps, leveraging MPTs, trust lines, order books, and AMM liquidity. These payments are executed when the payment involves non-XRP currencies, specifies `SendMax`, or includes `Paths`.
+Cross-currency payments convert one currency to another through intermediary steps, leveraging MPTs, trust lines, order books, and AMM liquidity. These payments are executed when the payment specifies `SendMax`, includes `Paths`, or has a non-XRP `Amount` (an IOU, or an MPT when the MPTokensV2 amendment is enabled).
 
 Cross-currency payment execution involves two complementary components: path finding and flow execution.
 

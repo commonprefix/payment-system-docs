@@ -30,17 +30,21 @@
 
 Credentials are a decentralized authorization mechanism on the XRP Ledger, borrowing concepts from the W3C Verifiable Credentials Data Model[^1], that allows accounts to create credentials for subjects (individuals, organizations, or devices) and use those credentials for access control. Once a credential is accepted and stored on the ledger, it can be autonomously verified by checking the ledger state without requiring interaction with the issuer.
 
-For example, a trading venue creates a PermissionedDomain requiring an "accredited_investor" credential from a regulatory authority. When Alice wants to trade on this venue:
-1. Alice obtains the credential: RegulatorAccountID sends a CredentialCreate transaction with Subject=AliceAccountID and CredentialType="accredited_investor"
+For example, a trading venue creates a [PermissionedDomain](../permissioned_domains/README.md) requiring an "accredited_investor" credential from a regulatory authority. When Alice wants to trade on this venue:
+1. The Regulator issues the credential: RegulatorAccountID sends a CredentialCreate transaction with Subject=AliceAccountID and CredentialType="accredited_investor"
 2. Alice accepts it: AliceAccountID sends a CredentialAccept transaction
-3. The credential ledger entry now exists with lsfAccepted flag set
-4. When Alice submits an OfferCreate transaction on the permissioned domain, the ledger checks: Does a Credential exist where Subject=AliceAccountID, Issuer=RegulatorAccountID, CredentialType="accredited_investor", lsfAccepted=true, and not expired?
-5. If yes, the transaction is authorized - all without any transaction from RegulatorAccountID
+3. The credential ledger entry now exists with `lsfAccepted` flag set
+4. When Alice submits an OfferCreate transaction on the permissioned domain, the ledger checks: Does a Credential exist where `Subject=AliceAccountID, Issuer=RegulatorAccountID, CredentialType="accredited_investor", lsfAccepted=true`, and not expired?
+5. If yes, the transaction is authorized
 
-Credentials can also be used for DepositAuth (enabling payments from credential holders without individual preauthorization), self-issued authorization markers (issuer == subject), and tiered access control (different credential types representing different authorization levels from the same issuer).
+Credentials can also be used for:
+
+- **[`DepositAuth`](#41-depositauth-integration)**: An account with the `lsfDepositAuth` flag accepts incoming payments, for XRP, IOUs, and MPTs alike, only from authorized senders. Instead of pre-authorizing each sender individually, credentials can be used to authorize an `(issuer, credentialType)` pair. Any holder of a matching accepted credential can make a payment to an account with the `lsfDepositAuth` flag by listing it in the payment's `CredentialIDs` field.
+- **Self-attestation (issuer == subject)**: an account can issue a credential to itself. This is a verifiable on-ledger claim about itself, accepted automatically.
+- **Tiered access control**: different credential types representing different authorization levels from the same issuer.
 
 [^1]: W3C Verifiable Credentials Data Model: https://www.w3.org/TR/vc-data-model-2.0/
-[^2]: For self-issued credentials (issuer == subject), the credential appears in only one directory, so SubjectNode is not set. sfSubjectNode defined as soeOPTIONAL: [`ledger_entries.macro`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/detail/ledger_entries.macro#L443). SubjectNode only set in the issuer != subject branch: [`Credentials.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Credentials.cpp#L156-L168)
+[^2]: For self-issued credentials (issuer == subject), the credential appears in only one directory, so SubjectNode is not set. sfSubjectNode defined as soeOPTIONAL: [`ledger_entries.macro`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/detail/ledger_entries.macro#L445). SubjectNode only set in the issuer != subject branch: [`Credentials.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/credentials/CredentialCreate.cpp#L163-L174)
 
 ## 1.1. Terminology and Concepts
 
@@ -50,7 +54,7 @@ Credentials can also be used for DepositAuth (enabling payments from credential 
 
 **Credential Type**: A string identifier (max 64 bytes) that categorizes the credential. This allows different credential types from the same issuer (e.g., "kyc_basic", "kyc_advanced", "membership_gold"). Applications use the credential type to determine what authorization the credential provides.
 
-**Acceptance**: Credentials must be explicitly accepted by the subject (via `CredentialAccept` transaction) before they can be used for authorization. This two-phase process (create then accept) ensures subjects control what credentials appear in their account and prevents unwanted credential issuance.
+**Acceptance**: Before a credential can be used for authorization, the subject must explicitly accept it via `CredentialAccept` (self-issued credentials, where issuer == subject, are accepted automatically). An unaccepted credential still appears in the subject's directory but is inactive, and the *issuer* pays its reserve until acceptance. This ensures a credential can't be used on the subject's behalf, or charged against the subject's reserve, without their consent.
 
 **Expiration**: Credentials can optionally have an expiration time. After expiration, the credential can no longer be used for authorization and can be deleted by anyone to recover ledger space.
 
@@ -127,9 +131,9 @@ This ensures each credential is uniquely identified by its (subject, issuer, typ
 | `CredentialType`    | Blob      | Yes      | Type identifier string (max 64 bytes)                     |
 | `Expiration`        | UInt32    | Optional | Unix timestamp when credential expires                    |
 | `URI`               | Blob      | Optional | Reference URI for credential metadata (max 256 bytes)     |
-| `SubjectNode`       | UInt64    | Optional | Index of the subject's owner directory page (only present when issuer != subject)[^2] |
 | `IssuerNode`        | UInt64    | Yes      | Index of the issuer's owner directory page                |
-| `Flags`             | UInt32    | Optional | Credential flags (see below)                              |
+| `SubjectNode`       | UInt64    | Optional | Index of the subject's owner directory page (only present when issuer != subject)[^2] |
+| `Flags`             | UInt32    | Yes      | Credential flags (see below); always present, 0 until `lsfAccepted` is set |
 | `PreviousTxnID`     | Hash256   | Yes      | Hash of the previous transaction that modified this entry |
 | `PreviousTxnLgrSeq` | UInt32    | Yes      | Ledger sequence of the previous transaction               |
 
@@ -145,8 +149,8 @@ The `Flags` field can contain the following values:
 - When `lsfAccepted` is not set: The credential exists but has not been accepted by the subject. It cannot be used for authorization. It appears in both the issuer's and subject's owner directories, but only the issuer's owner count is incremented (the issuer pays the reserve).[^3]
 - When `lsfAccepted` is set: The credential has been accepted and is active. It appears in both the issuer's and subject's owner directories and can be used for authorization.
 
-[^3]: Credential added to both directories during creation: [`Credentials.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Credentials.cpp#L137-L169)
-[^4]: Deletion authorization: [`Credentials.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/tx/detail/Credentials.cpp#L244-L249)
+[^3]: Credential added to both directories during creation: [`Credentials.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/credentials/CredentialCreate.cpp#L147-L174)
+[^4]: Deletion authorization: [`Credentials.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/credentials/CredentialDelete.cpp#L89-L94)
 - Self-issued credentials (issuer == subject) automatically have `lsfAccepted` set during creation.
 
 ### 2.1.3. Pseudo-accounts
@@ -176,10 +180,10 @@ Credentials follow the standard XRP Ledger reserve requirements:
 
 - **Owner Reserve**: Each credential requires one owner reserve from the account that owns it
 - **Before Acceptance**: Issuer pays the reserve (since credential is in issuer's directory)
-- **After Acceptance**: Subject pays the reserve (credential moved to subject's directory)
+- **After Acceptance**: Subject pays the reserve (reserve responsibility transfers to the subject)
 - **Self-Issued**: Account pays one reserve (not two, since there's only one directory entry)
 
-The owner reserve is calculated as `incrementalReserve` (currently 2 XRP on Mainnet). When a credential is deleted, the reserve is freed and the owner count decreases.
+The owner reserve is calculated as `incrementalReserve` (the per-object owner reserve increment set by the network). When a credential is deleted, the reserve is freed and the owner count decreases.
 
 # 3. Transactions
 
@@ -383,8 +387,12 @@ The sender includes the hashes of credentials they hold. During transaction proc
 1. Checks if the destination has `lsfDepositAuth` enabled
 2. If yes, verifies the sender is preauthorized OR holds a valid credential
 3. Looks up each credential hash in `CredentialIDs`
-4. Checks if any credential matches the destination's accepted credential specifications
-5. Verifies the credential is not expired and has `lsfAccepted` flag set
+4. Checks that the `(issuer, credentialType)` pairs of all supplied credentials together form a set that exactly matches one of the destination's credential `DepositPreauth` entries
+5. Each supplied credential must exist, belong to the sender, and have `lsfAccepted` set (else `tecBAD_CREDENTIALS`); and must not be expired (else `tecEXPIRED`)
+
+Supplying `CredentialIDs` is itself constrained: if any listed credential is expired, the transaction fails with `tecEXPIRED` before the deposit-authorization checks run, and this applies to any transaction that carries `CredentialIDs` (Payment, EscrowFinish, etc.), even when the destination does not require deposit authorization. The expired credential is also deleted as part of this (recovering its reserve), even though the transaction fails. Under the `fixCleanup3_1_3` amendment, if that deletion itself fails, the transaction halts and returns the deletion's error (e.g. `tecINTERNAL`) instead of `tecEXPIRED`.[^5]
+
+[^5]: [`CredentialHelpers.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65)
 
 **Example Flow**:
 

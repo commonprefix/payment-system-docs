@@ -26,9 +26,9 @@
 
 # 1. Introduction
 
-PermissionedDomains enable credential-based access control for decentralized exchange activity on the XRP Ledger. A domain owner creates a PermissionedDomain specifying which credentials are required, and only accounts holding those credentials can place offers within that domain. This creates segregated order books where trading activity is restricted to authorized participants.
+PermissionedDomains enable credential-based access control for decentralized exchange activity on the XRP Ledger. A domain owner creates a PermissionedDomain specifying which credentials are required, and only accounts holding those credentials can place offers within that domain. This creates segregated order books where trading activity is restricted to authorized participants. Domain restrictions also apply to cross-currency payments that carry a `DomainID`, both the sender and receiver must be in the domain (see [§4.1 Domain Membership](#41-domain-membership)).
 
-Domain offers support all asset types available on the XRP Ledger: XRP, tokens (issued currencies), and MPTs (Multi-Purpose Tokens). Any trading pair can be restricted to a permissioned domain.
+Domain offers support all asset types available on the XRP Ledger: XRP, tokens (issued currencies), and MPTs (Multi-Purpose Tokens, which require the `MPTokensV2` amendment). Any trading pair can be restricted to a permissioned domain. Note that domain offers cross only against the permissioned limit order book; automated market maker (AMM) pools are not consulted for domain crossing.[^amm-no-domain]
 
 For example, a securities exchange creates a PermissionedDomain requiring "accredited_investor" credentials from a regulatory authority. When Alice wants to trade:
 1. Domain Setup: ExchangeAccountID submits PermissionedDomainSet with: `AcceptedCredentials=[{Issuer: RegulatorAccountID, CredentialType: "accredited_investor"}]`
@@ -38,6 +38,8 @@ For example, a securities exchange creates a PermissionedDomain requiring "accre
 5. Offer placement: Alice's offer is placed in the domain's order book, matching with other domain offers and hybrid offers
 
 The domain owner always has access to their own domain. All other participants must hold valid credentials. Credentials can be revoked (via expiration or deletion), automatically removing access without the domain owner's involvement.
+
+[^amm-no-domain]: AMM pools are not consulted when a book has a domain: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L820-L822)
 
 ## 1.1. Terminology and Concepts
 
@@ -63,14 +65,16 @@ The domain owner always has access to their own domain. All other participants m
 
 **Domain ID Calculation**: `hash(PERMISSIONED_DOMAIN_NAMESPACE, owner_account, creation_sequence)`
 
-The domain ID is computed at creation using the owner's account and the transaction sequence, making it immutable and globally unique.
+The domain ID is computed at creation using the owner's account and the sequence number consumed by the creating transaction. This can be `Sequence`, or its `TicketSequence` when submitted via a Ticket[^pd-seq].
+
+[^pd-seq]: Domain ID and the stored `Sequence` use the transaction's effective sequence (ticket-aware) under the `fixCleanup3_1_3` amendment: [`PermissionedDomainSet.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/permissioned_domain/PermissionedDomainSet.cpp#L113-L115)
 
 ### 2.1.2. Fields
 
 | Field Name            | Type      | Required           | Description                                   |
 |-----------------------|-----------|--------------------|-----------------------------------------------|
 | `Owner`               | AccountID | :heavy_check_mark: | The account that owns this domain             |
-| `Sequence`            | UInt32    | :heavy_check_mark: | Domain creation sequence (from transaction)   |
+| `Sequence`            | UInt32    | :heavy_check_mark: | Sequence consumed by the creating transaction (`Sequence`, or `TicketSequence` if ticketed) |
 | `AcceptedCredentials` | Array     | :heavy_check_mark: | Credentials that grant domain access (max 10) |
 | `OwnerNode`           | UInt64    | :heavy_check_mark: | Owner directory page index                    |
 | `PreviousTxnID`       | Hash256   | :heavy_check_mark: | Previous transaction hash                     |
@@ -113,6 +117,10 @@ When present on an Offer ledger entry, this field indicates the offer exists in 
 **AdditionalBooks Field** (Array, optional): Present on hybrid offers, contains references to additional order book directories where the offer appears. Each array element is an object with:
 - `BookDirectory` (Hash256): Order book directory hash
 - `BookNode` (UInt64): Page index within the directory
+
+Under the `fixCleanup3_2_0` amendment, when a hybrid offer partially crosses on placement, the open-book `BookDirectory` listed here is keyed by the offer's original placement rate, so it shares the same quality (`ExchangeRate`) as the primary domain `BookDirectory`. Before the amendment the open-book directory was keyed from the post-crossing amounts and could differ slightly due to rounding.[^pd-hybrid-rate]
+
+[^pd-hybrid-rate]: [`OfferCreate.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L944-L953)
 
 # 3. Transactions
 
@@ -160,7 +168,7 @@ Creates a new PermissionedDomain (when DomainID is omitted) or updates an existi
 **If DomainID is omitted (creation)**:
 - `PermissionedDomain` object is **created** with:
   - `Owner`: set to Account
-  - `Sequence`: set to transaction sequence
+  - `Sequence`: set to the transaction's effective sequence (its `Sequence`, or `TicketSequence` if ticketed)
   - `AcceptedCredentials`: sorted credentials array
   - `OwnerNode`: page index in owner directory
 - `Owner`'s owner count is **incremented** by 1
@@ -237,7 +245,9 @@ Function: accountInDomain(view, account, domainID)
 4. Return FALSE
 ```
 
-**Expiration Check**: Credential expiration is compared against the ledger's `parentCloseTime`. Expired credentials are treated as if they don't exist for domain access purposes.
+**Expiration Check**: Credential expiration is compared against the ledger's `parentCloseTime`. Expired credentials are treated as if they don't exist for domain access purposes. During transaction apply, an expired credential encountered while verifying domain membership is also deleted to reclaim its reserve; under the `fixCleanup3_1_3` amendment, if that deletion fails the transaction halts and returns the propagated error (e.g. `tecINTERNAL`) instead of continuing the membership check.[^pd-expiry-delete]
+
+[^pd-expiry-delete]: [`removeExpired`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65), [`verifyValidDomain`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L332-L334)
 
 **Performance**: Verification iterates through the domain's AcceptedCredentials array (max 10 entries), performing one ledger lookup per credential until a valid match is found.
 

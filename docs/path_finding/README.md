@@ -7,7 +7,7 @@
     - [1.1.3. Example: Issuing and Redeeming MPTs](#113-example-issuing-and-redeeming-mpts)
     - [1.1.4. Example: MPT Holder to Holder](#114-example-mpt-holder-to-holder)
     - [1.1.5. Example: Different Currencies](#115-example-different-currencies)
-    - [1.1.6. Example: Same Currency Code, Different Issuers](#116-example-same-currency-code-different-issuers)
+    - [1.1.6. Example: Same Currency Code IOU, Different Issuers](#116-example-same-currency-code-iou-different-issuers)
   - [1.2. Path Types](#12-path-types)
   - [1.3. Path Finding](#13-path-finding)
   - [1.4. Algorithm](#14-algorithm)
@@ -152,7 +152,7 @@ Given a source and a destination, path finding uses path types to create actual 
 
 Each path represents a different way value can flow from Alice's USD to Bob's EUR, with different exchange rates and liquidity characteristics. A single payment may need multiple paths to complete, because not every path will provide full liquidity. 
 
-It is important to note that the path finding code in `rippled` is not responsible for returning the full path. For example, in [different currencies example](#115-example-different-currencies), the path finding will only return:
+It is important to note that the path finding code in `xrpld` is not responsible for returning the full path. For example, in [different currencies example](#115-example-different-currencies), the path finding will only return:
 
 Path 1:
 
@@ -219,7 +219,7 @@ Starting from Alice with USD:
 - `"sb"`: Query OrderBookDB for any order books that accept USD as input. Because no source issuer was specified, the source asset's issuer defaults to Alice herself[^source-issuer-default]. No order books exist for USD.Alice, so no books are found.
   - Terminates (`"sbf"` and `"sbfd"` have no incomplete paths to examine)
 
-[^source-issuer-default]: Source issuer defaults to source account: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L238-L241)
+[^source-issuer-default]: Source issuer defaults to source account: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L274-L277)
 
 **Step 4: Expand Path Type: `"saxfd"`**
 - `"s"`: Start at Alice (USD)
@@ -279,11 +279,11 @@ Unless the user is trying to convert the entire possible amount of an asset, whe
 
 Paths are ranked by quality first (lower cost is better), then by liquidity (higher is better), then by path length (shorter is better)[^rank-sort]. In this example, quality alone determines the order: Path 2 (1.04), Path 1 (1.05), Path 3 (1.06). When the user is converting the entire possible amount of an asset, quality is ignored and paths are ranked by liquidity first.
 
-[^min-liquidity]: Minimum liquidity calculation: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L139-L143)
+[^min-liquidity]: Minimum liquidity calculation: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L182-L186)
 
-[^max-paths]: Maximum paths constant: [`TransactionSign.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/rpc/detail/TransactionSign.cpp#L286-L291)
+[^max-paths]: Maximum paths constant: [`TransactionSign.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/TransactionSign.cpp#L317-L321)
 
-[^rank-sort]: Path ranking comparator: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L559-L574)
+[^rank-sort]: Path ranking comparator: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L582-L597)
 
 ## 1.5. Structure
 
@@ -332,9 +332,9 @@ Path finding supports an optional `domain` parameter that enables permissioned D
 - Forwarded to OrderBookDB queries in `addLink` when discovering available books[^pathfinder-domain-orderbook] (see [Section 4.4](#44-addlink))
 - Passed to RippleCalc and Flow during path ranking and execution[^pathfinder-domain-flow] (see [Section 5.1](#51-computepathranks))
 
-[^pathfinder-domain-constructor]: Pathfinder domain parameter storage: [`Pathfinder.cpp:180,192`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L180-L192)
-[^pathfinder-domain-orderbook]: OrderBookDB domain filtering flow: `addLink` ([`Pathfinder.cpp:1002`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1002)) calls `getPathsOut` ([`Pathfinder.cpp:1161`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1161)), which queries OrderBookDB with domain parameter ([`Pathfinder.cpp:763`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L763))
-[^pathfinder-domain-flow]: Domain passed to Flow: [`Pathfinder.cpp:380`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L380)
+[^pathfinder-domain-constructor]: Pathfinder domain parameter storage: [`Pathfinder.cpp:220,230`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L220-L230)
+[^pathfinder-domain-orderbook]: OrderBookDB domain filtering flow: `addLink` ([`Pathfinder.cpp:995`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L995)) calls `getPathsOut` ([`Pathfinder.cpp:1145`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1145)), which queries OrderBookDB with domain parameter ([`Pathfinder.cpp:786`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L786))
+[^pathfinder-domain-flow]: Domain passed to Flow: [`Pathfinder.cpp:411`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L411)
 
 # 2. Terminology and Concepts
 
@@ -371,25 +371,25 @@ The pathfinder categorizes each payment request into one of five types:
 
 | PaymentType | Description                  | Example                                |
 |-------------|------------------------------|----------------------------------------|
-| `pt_XRP_to_XRP` | XRP to XRP payment           | Alice sends XRP to Bob                 |
-| `pt_XRP_to_nonXRP` | XRP to IOU or MPT payment    | Alice sends XRP, Bob receives MPT      |
-| `pt_nonXRP_to_XRP` | IOU or MPT to XRP payment    | Alice sends USD or MPT, Bob receives XRP |
-| `pt_nonXRP_to_same` | Same IOU or MPT payment      | Alice sends USD, Bob receives USD (same asset) |
-| `pt_nonXRP_to_nonXRP` | Different IOU or MPT payment | Alice sends EUR, Bob receives USD      |
+| `PaymentType::XrpToXrp` | XRP to XRP payment           | Alice sends XRP to Bob                 |
+| `PaymentType::XrpToNonXrp` | XRP to IOU or MPT payment    | Alice sends XRP, Bob receives MPT      |
+| `PaymentType::NonXrpToXrp` | IOU or MPT to XRP payment    | Alice sends USD or MPT, Bob receives XRP |
+| `PaymentType::NonXrpToSame` | Same IOU or MPT payment      | Alice sends USD, Bob receives USD (same asset) |
+| `PaymentType::NonXrpToNonXrp` | Different IOU or MPT payment | Alice sends EUR, Bob receives USD      |
 
-While `pt_XRP_to_XRP` is defined as a payment type and is initialized with an empty path type list, XRP->XRP payments **never actually invoke the path finding or flow system**. The Payment transactor detects XRP->XRP payments and processes them as direct balance transfers, bypassing both path finding and the Flow engine entirely.
+While `PaymentType::XrpToXrp` is defined as a payment type and is initialized with an empty path type list, XRP->XRP payments **never actually invoke the path finding or flow system**. The Payment transactor detects XRP->XRP payments and processes them as direct balance transfers, bypassing both path finding and the Flow engine entirely.
 
 ## 2.3. Path Types
 
 Each payment type has a predefined table of path types at different search levels (costs). Higher search levels explore more complex paths.
 
-Example types for `pt_XRP_to_nonXRP`:
+Example types for `PaymentType::XrpToNonXrp`:
 
 | Cost | Type | Path Structure                                               |
 |------|----------|--------------------------------------------------------------|
-| 1 | `sfd` | Source -> Book -> Destination                                |
-| 3 | `sfad` | Source -> Book -> Account -> Destination                     |
-| 5 | `sfaad` | Source -> Book -> Account -> Account -> Destination          |
+| 1 | `sfd` | Source -> Destination Book -> Destination                                |
+| 3 | `sfad` | Source -> Destination Book -> Account -> Destination                     |
+| 5 | `sfaad` | Source -> Destination Book -> Account -> Account -> Destination          |
 | 6 | `sbfd` | Source -> Book -> Destination Book -> Destination            |
 | 8 | `sbafd` | Source -> Book -> Account -> Destination Book -> Destination |
 
@@ -397,11 +397,11 @@ The path finding algorithm searches through these types based on the requested s
 
 For the complete list of path types for each payment type, see `Pathfinder::initPathTable()`[^init-path-table].
 
-[^init-path-table]: Path table initialization: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1417-L1480)
+[^init-path-table]: Path table initialization: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1388-L1453)
 
 **Configuration**
 
-The search depth can be configured in `rippled.cfg`:
+The search depth can be configured in `xrpld.cfg`:
 
 | Parameter | Description | Default | Recommended |
 |-----------|-------------|---------|-------------|
@@ -410,35 +410,35 @@ The search depth can be configured in `rippled.cfg`:
 | `path_search_max` | Maximum search aggressiveness | 3 | 10 (for advanced path finding) |
 | `path_search_old` | Search level for legacy path finding interfaces | 2 | 7 (for advanced path finding) |
 
-Higher values can exponentially increase resource usage. Setting `path_search_max` to 0 disables path finding entirely.
+Higher values can exponentially increase resource usage. Setting `path_search_max` to 0 disables path finding entirely. On a server configured as a validator (one with `[validation_seed]` or `[validator_token]`), `path_search_max` defaults to 0 (path finding disabled) unless explicitly set.
 
 ### 2.3.1. Node Types
 
 Path types are constructed from a sequence of node types. Each node type tells the path finding algorithm what kind of connection to explore at that step in the path:
 
-**`nt_SOURCE` (code: `s`)** - The source account
+**`NodeType::Source` (code: `s`)** - The source account
 
 This represents the starting point of the payment. The source is always the first node in any path type. When path finding expands this node, it creates a single empty path representing the starting position at the source account.
 
-**`nt_ACCOUNTS` (code: `a`)** - Accounts connected via trust lines or MPTs
+**`NodeType::Accounts` (code: `a`)** - Accounts connected via trust lines or MPTs
 
 When path finding encounters an `a` node, it expands to neighboring accounts connected to the current position via [trust lines](../trust_lines/README.md) or [MPTs](../mpts/README.md). The actual account selection involves filtering by NoRipple flags, liquidity, and authorization, then ranking candidates by their number of viable outgoing paths. See [Section 4.4](#44-addlink) for details.
 
-**`nt_BOOKS` (code: `b`)** - Order books for currency conversion
+**`NodeType::Books` (code: `b`)** - Order books for currency conversion
 
 When path finding encounters a `b` node, it queries [OrderBookDB](#45-orderbookdb) for all order books that accept the current currency as input, allowing the path to exchange into a different currency. See [Section 4.4](#44-addlink) for details on book expansion, including how output issuers are handled.
 
-**`nt_XRP_BOOK` (code: `x`)** - Order book to XRP
+**`NodeType::XrpBook` (code: `x`)** - Order book to XRP
 
-A specialized version of `nt_BOOKS` that only considers order books that convert the current currency to XRP. XRP often serves as a bridge currency between other currencies, and limiting to XRP books reduces the search space. [OrderBookDB](#45-orderbookdb) maintains a separate `xrpBooks` cache (and `xrpDomainBooks` for permissioned DEX) for faster lookups.
+A specialized version of `NodeType::Books` that only considers order books that convert the current currency to XRP. XRP often serves as a bridge currency between other currencies, and limiting to XRP books reduces the search space. [OrderBookDB](#45-orderbookdb) maintains a separate `xrpBooks` cache (and `xrpDomainBooks` for permissioned DEX) for faster lookups.
 
-**`nt_DEST_BOOK` (code: `f`)** - Order book to destination currency
+**`NodeType::DestBook` (code: `f`)** - Order book to destination currency
 
-This is another specialized version of `nt_BOOKS` that only considers order books that output the destination currency. The `f` stands for "final" book. When path finding encounters an `f` node, it only looks for order books that convert the current currency into whatever currency the destination wants to receive. This ensures the path ends with the correct currency.
+This is another specialized version of `NodeType::Books` that only considers order books that output the destination currency. The `f` stands for "final" book. When path finding encounters an `f` node, it only looks for order books that convert the current currency into whatever currency the destination wants to receive. This ensures the path ends with the correct currency.
 
 For example, if the destination wants EUR, an `f` node will only consider order books like USD/EUR, XRP/EUR, GBP/EUR, etc.
 
-**`nt_DESTINATION` (code: `d`)** - The destination account
+**`NodeType::Destination` (code: `d`)** - The destination account
 
 The destination is always the last node in any path type. When path finding encounters a `d` node, it searches for account connections to the effective destination. For IOUs and MPTs, the effective destination is the issuer, not the final recipient. If a preceding `f` step already ended at the issuer, the path is already complete and `d` has nothing to add. When it does fire, `d` adds the issuer as a trust line or MPT hop, completing the path via rippling.
 
@@ -541,12 +541,12 @@ An `STPathElement`[^stpathelement] is the data structure representing a single s
 - `mAssetID` (PathAsset) - Holds either a Currency or an MPTID
 - `mIssuerID` (AccountID) - The issuer (if typeIssuer bit is set)
 
-[^stpathelement]: STPathElement class definition: [`STPathSet.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STPathSet.h#L18)
-[^mtype]: mType field: [`STPathSet.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STPathSet.h#L29)
-[^typeaccount]: typeAccount constant: [`STPathSet.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STPathSet.h#L31)
-[^typecurrency]: typeCurrency constant: [`STPathSet.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STPathSet.h#L33)
-[^typeissuer]: typeIssuer constant: [`STPathSet.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STPathSet.h#L34)
-[^typempt]: typeMPT constant: [`STPathSet.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/STPathSet.h#L35)
+[^stpathelement]: STPathElement class definition: [`STPathSet.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/STPathSet.h#L17)
+[^mtype]: mType field: [`STPathSet.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/STPathSet.h#L19)
+[^typeaccount]: typeAccount constant: [`STPathSet.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/STPathSet.h#L32)
+[^typecurrency]: typeCurrency constant: [`STPathSet.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/STPathSet.h#L33)
+[^typeissuer]: typeIssuer constant: [`STPathSet.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/STPathSet.h#L34)
+[^typempt]: typeMPT constant: [`STPathSet.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/STPathSet.h#L35)
 
 **Types of path elements:**
 
@@ -581,10 +581,10 @@ Represents an MPT order book. Has both MPT identifier and issuer (0x40 | 0x20 = 
 Represents the source account holding a specific asset. **Always added as the first element**[^source-element-normalization] during path normalization (in the Flow engine's `toStrand` function). Has account, currency, and issuer (0x01 | 0x10 | 0x20 = 0x31) or account, MPT, and issuer (0x01 | 0x40 | 0x20 = 0x61).
 The issuer in the first element is set to source, and the next element connects it to a particular issuer.
 
-[^account-element-creation]: Account element creation during pathfinding: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1216-L1220)
-[^xrp-book-element-creation]: XRP book element creation during pathfinding: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1242-L1246)
-[^iou-book-element-creation]: IOU book element creation during pathfinding: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1315-L1319)
-[^source-element-normalization]: Source element added during path normalization: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L274-L286)
+[^account-element-creation]: Account element creation during pathfinding: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1202-L1203)
+[^xrp-book-element-creation]: XRP book element creation during pathfinding: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1225-L1226)
+[^iou-book-element-creation]: IOU book element creation during pathfinding: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1287-L1291)
+[^source-element-normalization]: Source element added during path normalization: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L262-L273)
 
 
 ## 3.3. Path
@@ -683,7 +683,7 @@ The entire flow can be interrupted by using `continueCallback`. This callback al
 
 The `findPaths` function[^find-paths] is the main path discovery engine. It searches for paths from `mSrcAccount` to `mEffectiveDst`.
 
-[^find-paths]: Main path discovery function: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L203-L349)
+[^find-paths]: Main path discovery function: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L241-L380)
 
 - **For XRP payments**: `mEffectiveDst` equals `mDstAccount`, so paths go directly to the destination
 - **For IOU and MPT payments**: `mEffectiveDst` is the issuer of the destination amount. Path finding only needs to reach the issuer - the Flow engine will handle the final hop from issuer to destination through path normalization.
@@ -739,7 +739,7 @@ def findPaths(searchLevel, continueCallback) -> bool:
     issuer = xrpAccount() if isXRP(mSrcPathAsset) else account
     mSource = STPathElement(account, mSrcPathAsset, issuer)
 
-    # Determine payment type (one of: pt_XRP_to_XRP, pt_XRP_to_nonXRP, etc.)
+    # Determine payment type (one of: PaymentType::XrpToXrp, PaymentType::XrpToNonXrp, etc.)
     paymentType = determinePaymentType(mSrcPathAsset, mDstAmount.asset())
 
     # Search for paths using types for this payment type
@@ -759,7 +759,7 @@ def findPaths(searchLevel, continueCallback) -> bool:
 
 `addPathsForType`[^add-paths-for-type] takes a `PathType` like `"sfad"` and converts it into concrete paths by building incrementally, one node type at a time.
 
-[^add-paths-for-type]: Incremental path building function: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L856-L946)
+[^add-paths-for-type]: Incremental path building function: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L872-L943)
 
 **Parameters:**
 
@@ -809,17 +809,17 @@ def addPathsForType(pathType, continueCallback) -> list[STPath]:
     nodeType = pathType[-1]  # Get last node type (e.g., 'd' from "sfd")
     pathsOut = []
 
-    if nodeType == nt_SOURCE:
+    if nodeType == NodeType::Source:
         pathsOut = [empty_path]
-    elif nodeType == nt_ACCOUNTS:
+    elif nodeType == NodeType::Accounts:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_ACCOUNTS, continueCallback=continueCallback)
-    elif nodeType == nt_BOOKS:
+    elif nodeType == NodeType::Books:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_BOOKS, continueCallback=continueCallback)
-    elif nodeType == nt_XRP_BOOK:
+    elif nodeType == NodeType::XrpBook:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_BOOKS | afOB_XRP, continueCallback=continueCallback)
-    elif nodeType == nt_DEST_BOOK:
+    elif nodeType == NodeType::DestBook:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_BOOKS | afOB_LAST, continueCallback=continueCallback)
-    elif nodeType == nt_DESTINATION:
+    elif nodeType == NodeType::Destination:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_ACCOUNTS | afAC_LAST, continueCallback=continueCallback)
 
     mPaths[pathType] = pathsOut
@@ -830,7 +830,7 @@ def addPathsForType(pathType, continueCallback) -> list[STPath]:
 
 `addLinks`[^add-links] is a simple wrapper that calls `addLink` for each path in a set.
 
-[^add-links]: Wrapper function for batch path extension: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L840-L854)
+[^add-links]: Wrapper function for batch path extension: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L857-L870)
 
 **Parameters:**
 
@@ -855,7 +855,7 @@ def addLinks(currentPaths, incompletePaths, addFlags, continueCallback):
 
 `addLink`[^add-link] is where the actual path expansion happens - it's the function that queries the ledger and creates new path branches.
 
-[^add-link]: Core path expansion function: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1002-L1354)
+[^add-link]: Core path expansion function: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L995-L1324)
 
 **Parameters:**
 
@@ -868,7 +868,7 @@ def addLinks(currentPaths, incompletePaths, addFlags, continueCallback):
 
 Every partial path has an **endpoint**, derived from its last [path element](#32-path-elements) (or from the source if the path is empty)[^addlink-endpoint]. The endpoint provides an account, an asset (currency or MPTID), and an issuer, which `addLink` uses to determine where to search for the next hop.
 
-[^addlink-endpoint]: Endpoint extraction from partial path: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1008-L1012)
+[^addlink-endpoint]: Endpoint extraction from partial path: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1001-L1005)
 
 The function examines the path's current endpoint (which account and currency/asset) and uses `addFlags` to determine which ledger data source to query and what filters to apply. It produces two kinds of output: paths that reach the effective destination with the correct asset are added to `mCompletePaths`, while paths that still need further extension are added to `incompletePaths`. `addPathsForType` feeds incomplete paths back into `addLink` for the next expansion round, and complete paths proceed to [path ranking](#5-path-ranking), where they are simulated through the Flow engine to measure quality and liquidity.
 
@@ -886,7 +886,7 @@ The function's behavior varies significantly between account expansion and book 
 
 When the path's current endpoint is on XRP and the destination amount is XRP and the current path is non-empty, it adds the path to complete paths.[^xrp-endpoint-check] Empty paths are not added because they would represent XRP->XRP payments and those do not require pathfinding.
 
-[^xrp-endpoint-check]: XRP endpoint completion check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1026-L1034)
+[^xrp-endpoint-check]: XRP endpoint completion check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1019-L1027)
 
 For non-XRP endpoints, the function queries for trust lines or MPTs connected to the account at the path's current endpoint.
 
@@ -913,40 +913,40 @@ Each asset connection undergoes these checks in order:
    - For MPTs: Rejects if zero balance OR maxed out OR not authorized
 6. **Source loop prevention**[^source-loop] - Rejects accounts that would loop back to the source
 
-[^currency-match]: Currency/asset match check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1092-L1101)
-[^dest-bypass]: Destination account bypass check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1079-L1083)
-[^dest-only]: Destination-only filtering check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1087-L1090)
-[^loop-detection]: Loop detection using hasSeen: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1122-L1123)
-[^liquidity-check]: Liquidity and NoRipple check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1102-L1120)
-[^source-loop]: Source loop prevention check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1154-L1157)
-[^get-ripple-lines-call]: getRippleLines call in addLink: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1177-L1180)
-[^is-no-ripple-out]: isNoRippleOut checks whether the last account in the path has NoRipple set on its outgoing link: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L963-L986)
-[^noripple-direction]: Trust line fetch direction based on NoRipple: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1175-L1183)
-[^get-ripple-lines-direction]: LineDirection::incoming excludes trust lines where the account has NoRipple set: [`TrustLine.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/TrustLine.cpp#L57-L58)
-[^noripple-candidate-check]: Per-candidate NoRipple check in addLink: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1111)
-[^asset-cache-superset]: AssetCache returns the outgoing superset when incoming is requested but outgoing is already cached: [`AssetCache.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/AssetCache.cpp#L67-L76)
-[^getpathsout]: getPathsOut computes the paths out score for an account: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L725-L840)
-[^getpathsout-auth]: getPathsOut checks lsfRequireAuth on the candidate account: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L747-L752)
-[^getpathsout-booksize]: Score starts with order book size: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L763)
-[^getpathsout-destination-bonus]: Destination bonus of +10000: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L784-L789)
-[^getpathsout-frozen]: Global freeze check in getPathsOut: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L753-L761)
-[^getpathsout-iou-loop]: IOU trust line scoring loop: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L766-L803)
-[^getpathsout-noripple]: getPathsOut skips trust lines where the peer has NoRipple set: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L791-L793)
-[^getpathsout-freeze]: getPathsOut skips trust lines where the peer has frozen the line: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L795-L797)
-[^getpathsout-mpt-loop]: MPT scoring loop: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L806-L832)
-[^getpathsout-mpt-match]: MPT ID match check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L811-L812)
-[^getpathsout-mpt-balance]: MPT zero balance or maxed out check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L814-L815)
-[^getpathsout-mpt-auth]: MPT authorization check: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L817-L818)
-[^getpathsout-mpt-destination]: MPT destination bonus of +10000: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L820-L823)
-[^getpathsout-mpt-frozen]: MPT frozen check (redundant with outer freeze check): [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L824-L825)
-[^getpathsout-mpt-count]: MPT count increment: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L828-L829)
-[^compare-account-candidate]: compareAccountCandidate sorts by priority descending, then account ID descending: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L65-L81)
-[^dest-complete-path]: Destination account with matching asset completes the path: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1134-L1145)
-[^dest-high-priority]: Destination account with non-matching asset receives high priority directly: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1147-L1152)
-[^getpathsout-zero-filter]: Candidates with score 0 are not added: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1168)
-[^candidate-extend]: Selected candidates are extended into incomplete paths: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1210-L1223)
-[^mpt-peer-issuer]: MPT peer is always the issuer, extracted from the MPTID: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L1066-L1068), [`MPTIssue.h`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/include/xrpl/protocol/MPTIssue.h#L79-L84)
-[^mpt-no-reverse]: Pathfinding targets `mEffectiveDst` (the issuer for non-XRP destinations), so it never needs to navigate from issuer to holder. The flow engine handles the final hop to the destination holder via path normalization: [`PaySteps.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/detail/PaySteps.cpp#L273-L337)
+[^currency-match]: Currency/asset match check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1082-L1092)
+[^dest-bypass]: Destination account bypass check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1069-L1073)
+[^dest-only]: Destination-only filtering check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1077-L1080)
+[^loop-detection]: Loop detection using hasSeen: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1110)
+[^liquidity-check]: Liquidity and NoRipple check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1093-L1108)
+[^source-loop]: Source loop prevention check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1138-L1141)
+[^get-ripple-lines-call]: getRippleLines call in addLink: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1161-L1163)
+[^is-no-ripple-out]: isNoRippleOut checks whether the last account in the path has NoRipple set on its outgoing link: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L958-L979)
+[^noripple-direction]: Trust line fetch direction based on NoRipple: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1159-L1166)
+[^get-ripple-lines-direction]: LineDirection::incoming excludes trust lines where the account has NoRipple set: [`TrustLine.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/TrustLine.cpp#L61)
+[^noripple-candidate-check]: Per-candidate NoRipple check in addLink: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1101)
+[^asset-cache-superset]: AssetCache returns the outgoing superset when incoming is requested but outgoing is already cached: [`AssetCache.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/AssetCache.cpp#L78-L87)
+[^getpathsout]: getPathsOut computes the paths out score for an account: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L749-L854)
+[^getpathsout-auth]: getPathsOut checks lsfRequireAuth on the candidate account: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L771-L775)
+[^getpathsout-booksize]: Score starts with order book size: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L786)
+[^getpathsout-destination-bonus]: Destination bonus of +10000: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L802-L806)
+[^getpathsout-frozen]: Global freeze check in getPathsOut: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L776-L784)
+[^getpathsout-iou-loop]: IOU trust line scoring loop: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L789-L820)
+[^getpathsout-noripple]: getPathsOut skips trust lines where the peer has NoRipple set: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L808-L810)
+[^getpathsout-freeze]: getPathsOut skips trust lines where the peer has frozen the line: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L812-L814)
+[^getpathsout-mpt-loop]: MPT scoring loop: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L823-L849)
+[^getpathsout-mpt-match]: MPT ID match check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L828-L829)
+[^getpathsout-mpt-balance]: MPT zero balance or maxed out check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L831-L832)
+[^getpathsout-mpt-auth]: MPT authorization check: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L834-L835)
+[^getpathsout-mpt-destination]: MPT destination bonus of +10000: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L837-L840)
+[^getpathsout-mpt-frozen]: MPT frozen check (redundant with outer freeze check): [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L841)
+[^getpathsout-mpt-count]: MPT count increment: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L845-L846)
+[^compare-account-candidate]: compareAccountCandidate sorts by priority descending, then account ID descending: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L108-L124)
+[^dest-complete-path]: Destination account with matching asset completes the path: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1121-L1130)
+[^dest-high-priority]: Destination account with non-matching asset receives high priority directly: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1132-L1136)
+[^getpathsout-zero-filter]: Candidates with score 0 are not added: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1152)
+[^candidate-extend]: Selected candidates are extended into incomplete paths: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1196-L1206)
+[^mpt-peer-issuer]: MPT peer is always the issuer, extracted from the MPTID: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L1057-L1059), [`MPTIssue.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/MPTIssue.h#L84-L93)
+[^mpt-no-reverse]: Pathfinding targets `mEffectiveDst` (the issuer for non-XRP destinations), so it never needs to navigate from issuer to holder. The flow engine handles the final hop to the destination holder via path normalization: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L261-L320)
 
 Accounts that pass all filters become candidates. When the candidate is the destination account and the current asset matches the destination asset, the path is complete[^dest-complete-path]. When the candidate is the destination account but the asset does not match, it receives a score of 10000 directly, bypassing `getPathsOut()`[^dest-high-priority]. All other candidates are scored by `getPathsOut()`[^getpathsout], which counts the number of viable onward connections from that account in the current asset.
 
@@ -1124,7 +1124,7 @@ OrderBookDB maintains four separate indexes for both offer-based order books and
 
 ### 4.5.1. OrderBookDB Construction
 
-On startup, `OrderBookDB.update()` ([OrderBookDB.cpp:77-156](https://github.com/XRPLF/rippled/blob/develop/src/xrpld/app/ledger/OrderBookDB.cpp#L77)) scans the entire ledger looking for two types of entries:
+On startup, `OrderBookDB.update()` ([OrderBookDBImpl.cpp:91-219](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/app/ledger/OrderBookDBImpl.cpp#L91-L219)) scans the entire ledger looking for two types of entries:
 
 **1. Order book directories (`ltDIR_NODE` with `sfExchangeRate`):**
 
@@ -1172,9 +1172,9 @@ The AssetCache provides two query methods:
   - If the `incoming` subset is cached when `outgoing` is requested, the subset is discarded and the full set is rebuilt[^asset-cache-rebuild].
 - `getMPTs(accountID)`: Returns MPTs held by an account
 
-[^get-ripple-lines-impl]: AssetCache::getRippleLines: [`AssetCache.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/AssetCache.cpp#L22-L99)
-[^get-trust-line-items-filter]: getTrustLineItems filters by direction, excluding trust lines with NoRipple when incoming: [`TrustLine.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/TrustLine.cpp#L57-L58)
-[^asset-cache-rebuild]: AssetCache discards incoming subset when outgoing is requested: [`AssetCache.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/AssetCache.cpp#L54-L65)
+[^get-ripple-lines-impl]: AssetCache::getRippleLines: [`AssetCache.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/AssetCache.cpp#L38-L106)
+[^get-trust-line-items-filter]: getTrustLineItems filters by direction, excluding trust lines with NoRipple when incoming: [`TrustLine.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/TrustLine.cpp#L61)
+[^asset-cache-rebuild]: AssetCache discards incoming subset when outgoing is requested: [`AssetCache.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/AssetCache.cpp#L66-L76)
 
 # 5. Path Ranking
 
@@ -1204,8 +1204,8 @@ To measure this, `computePathRanks` calls `RippleCalc.rippleCalculate()` with an
 
 If the default path succeeds, its delivery is subtracted from `mRemainingAmount`[^remaining-amount-init] to calculate the additional liquidity still needed beyond what the default path provides.
 
-[^default-path-partial]: Default path tested with partial payment enabled: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L433)
-[^remaining-amount-init]: `mRemainingAmount` initialized via `convertAmount`, which returns the largest possible amount in convert-all mode or the destination amount otherwise: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/a72c3438eb0591a76ac829305fcbcd0ed3b8c325/src/xrpld/app/paths/Pathfinder.cpp#L425)
+[^default-path-partial]: Default path tested with partial payment enabled: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L462)
+[^remaining-amount-init]: `mRemainingAmount` initialized via `convertAmount`, which returns the largest possible amount in convert-all mode or the destination amount otherwise: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L454) (`convertAmount` defined in [`PathfinderUtils.h`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/PathfinderUtils.h#L19-L26))
 
 By accounting for the default path first, path finding ensures that discovered paths are evaluated for their **incremental value** - what they contribute beyond the baseline liquidity that Flow will attempt anyway.
 
@@ -1316,7 +1316,7 @@ The `rankPaths` function evaluates each discovered path by testing its liquidity
 
 The function first calculates a minimum liquidity threshold that each path must meet to be worth including. This threshold serves as a quality filter, preventing the pathfinder from wasting computational resources ranking paths that contribute only negligible amounts to the payment.
 
-When not in convert-all mode, this threshold is `dstAmount / (maxPaths + 2)`, where `maxPaths` is hardcoded to **4** in the `rippled` implementation. This ensures each path can deliver at least a meaningful fraction of the destination amount. In convert-all mode, the threshold is set to the largest possible amount to find maximum available liquidity.
+When not in convert-all mode, this threshold is `dstAmount / (maxPaths + 2)`, where `maxPaths` is hardcoded to **4** in the `xrpld` implementation. This ensures each path can deliver at least a meaningful fraction of the destination amount. In convert-all mode, the threshold is set to the largest possible amount to find maximum available liquidity.
 
 Convert-all mode is triggered when the destination amount equals the maximum possible value for that currency (checked via `convertAllCheck(mDstAmount)`). This mode is used when discovering maximum available liquidity rather than targeting a specific amount - for example, when a user wants to convert their entire balance of one currency to another. In convert-all mode, path finding prioritizes liquidity over quality, finding paths that can move the most value regardless of exchange rates.
 
@@ -1373,7 +1373,7 @@ The [**Flow engine**](../flow/README.md) takes paths and converts them into exec
 
 The function calls `RippleCalc.rippleCalculate()` to simulate payment execution along the path, with default paths explicitly disabled so only the specific path's liquidity is measured[^getpathliq-no-default]. RippleCalc uses the Flow engine to execute a payment simulation on a sandbox ledger (a copy of the ledger that can be modified without affecting the real ledger state), returning how much was consumed from the source (`actualAmountIn`), how much was delivered to the destination (`actualAmountOut`), and whether the payment succeeded. The first call tests whether the path can deliver at least `minDstAmount`. In convert-all mode, partial payment is allowed to find the maximum available liquidity. In normal mode, the path must deliver exactly the minimum amount or it's rejected.
 
-[^getpathliq-no-default]: Default paths disabled in getPathLiquidity: [`Pathfinder.cpp`](https://github.com/gregtatcam/rippled/blob/develop/src/xrpld/app/paths/Pathfinder.cpp#L363)
+[^getpathliq-no-default]: Default paths disabled in getPathLiquidity: [`Pathfinder.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/Pathfinder.cpp#L394)
 
 If the first call succeeds and we are not in convert-all mode, the function makes a second call to probe for additional liquidity beyond the minimum. This second call attempts to deliver `(dstAmount - amountOut)` with partial payment allowed, discovering how much more the path can provide beyond the minimum threshold.
 
@@ -1407,7 +1407,7 @@ def getPathLiquidity(path, minDstAmount):
 
     if not convert_all_:
         # Test remaining liquidity
-        inputs2 = Input(partialPaymentAllowed=True)
+        inputs2 = Input(defaultPathsAllowed=False, partialPaymentAllowed=True)
         rc = RippleCalc.rippleCalculate(
             view=sandbox,
             maxAmountIn=srcAmount,
@@ -1589,7 +1589,7 @@ This is critical for subscriptions because:
 
 Both `path_find` and `ripple_path_find` RPCs support the `source_currencies` parameter, which controls which currencies the pathfinder considers as potential sources for funding the payment.
 
-The `source_currencies` handling happens in the `PathRequest` layer (RPC handler), **not** in the core Pathfinder algorithm. The PathRequest creates one Pathfinder instance per source asset:
+The `source_currencies` handling happens in the `PathRequest` layer (RPC handler), **not** in the core Pathfinder algorithm. The PathRequest creates one Pathfinder instance per source currency, reusing it across different issuers of that currency:
 
 ```mermaid
 flowchart TD
@@ -1621,17 +1621,17 @@ The client provides an array of currency/issuer pairs (up to 18 currencies):
     {"currency": "USD", "issuer": "rIssuer1..."},
     {"currency": "EUR", "issuer": "rIssuer2..."},
     {"currency": "XRP"},
-    {"mpt_id": "00000001B2..."}
+    {"mpt_issuance_id": "00000001B2..."}
   ]
 }
 ```
 
 For each source asset:
-1. PathRequest creates a separate Pathfinder instance
-2. The Pathfinder finds paths from that specific source asset to the destination
-3. Results are collected in a hash map: `mContext[issue] = pathSet`
+1. PathRequest looks up or creates a Pathfinder for that source currency (the cache is keyed by currency, so the Pathfinder is reused across issuers of the same currency)
+2. Path discovery (`findPaths`/`computePathRanks`) runs once per currency; path selection (`getBestPaths`) then runs per source asset, filtering the discovered paths to that asset's issuer
+3. Results are collected in a hash map keyed by the issuer-qualified asset: `mContext[issue] = pathSet`
 
-PathRequest will always create a PathFinder for any issuer of an IOU even if IOU currency is specified. 
+PathRequest does not create a separate Pathfinder for each issuer of an IOU; it reuses one Pathfinder per currency and runs a separate `getBestPaths` call per issuer to filter the shared discovered paths to that issuer.
 
 **When `source_currencies` is NOT specified:**
 

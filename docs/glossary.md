@@ -5,7 +5,7 @@
 Amendments are new features or other changes to the functional behavior of XRP Ledger.
 
 **Other terms**
-- *Feature* - in `rippled`, used to refer to amendments. E.g.:
+- *Feature* - in `xrpld`, used to refer to amendments. E.g.:
   - `bool isFeatureEnabled(featureSingleAssetVault);`
 
 ## CLOB
@@ -26,7 +26,7 @@ A type of asset in XRP Ledger. There are three different types of assets:
 - **MPT**
 
 **Other terms**
-- *Issue* - in `rippled`, used to denote any currency.
+- *Issue* - in `xrpld`, used to denote any currency.
 - *Asset*
 
 **Other meanings**
@@ -38,7 +38,7 @@ Currency issued by an account which balance is tracked in trust lines.
 
 **Other terms**
 - *Trust line token*
-- *Issue*, in `rippled`, used as a term for a currency issued by an account, but not MPT (*MPTIssue*).
+- *Issue*, in `xrpld`, used as a term for a currency issued by an account, but not MPT (*MPTIssue*).
 - *Issued Currency*
 
 ## MPT
@@ -46,7 +46,7 @@ Currency issued by an account which balance is tracked in trust lines.
 Multi-purpose token.
 
 **Other terms**
-- *MPTIssue* - in `rippled` used to refer to a wrapper around MPT ID, especially when disambiguating from token (referred to as *Issue*) 
+- *MPTIssue* - in `xrpld` used to refer to a wrapper around MPT ID, especially when disambiguating from token (referred to as *Issue*) 
 
 ## Offer
 
@@ -76,7 +76,7 @@ The exchange rate, calculated as the ratio of input amount to output amount, inc
 
 Quality can represent the exchange rate of individual components (such as a single offer or liquidity source) or the composite exchange rate across multiple components in a path.
 
-In `rippled`, quality is represented as a `Quality` class that encapsulates the input/output ratio and provides comparison operations for ranking.
+In `xrpld`, quality is represented as a `Quality` class that encapsulates the input/output ratio and provides comparison operations for ranking.
 
 ## Rippling
 
@@ -89,14 +89,14 @@ Rippling enables multi-hop IOU payments without requiring direct trust lines bet
 Trust Lines are a bidirectional relationship between an issuer of a token and another account.
 
 **Other terms**
-- *Trust* - in `rippled`, used as a noun to describe a trust line. `TrustSet` is used to create a trust line, represented by `RippleState` ledger entry. 
-- *Ripple line* - seldomly used in `rippled`. 
+- *Trust* - in `xrpld`, used as a noun to describe a trust line. `TrustSet` is used to create a trust line, represented by `RippleState` ledger entry. 
+- *Ripple line* - seldomly used in `xrpld`. 
 **Related terms**
-- *RippleState* - in `rippled`, name for ledger entry representing a trust line.
+- *RippleState* - in `xrpld`, name for ledger entry representing a trust line.
 
 ## XRP
 
 Native currency in XRP Ledger.
 
 **Other terms**
-- *Native* - in `rippled`, often used to disambiguate a currency as XRP.
+- *Native* - in `xrpld`, often used to disambiguate a currency as XRP.

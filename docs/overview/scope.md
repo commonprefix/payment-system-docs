@@ -1,6 +1,6 @@
 # Scope
 
-The **Payment Engine** is a feature of `rippled` responsible for executing payment transactions and offer
+The **Payment Engine** is a feature of `xrpld` responsible for executing payment transactions and offer
 crossings. Additionally, the Payment Engine serves as a component in pathfinding where it is used to evaluate paths. 
 
 Term `Payment Engine` has been used synonymously with the **Flow** feature, an amendment enabled on the XRP Ledger since 2016. 

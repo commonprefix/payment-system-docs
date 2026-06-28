@@ -30,7 +30,7 @@ The auction slot solves this by offering discounted trading fees to the slot own
 
 The auction slot lasts 24 hours (86,400 seconds). Since the slot can be taken over by a new bidder at any time during this period, the slot owner may not use the full 24 hours.
 
-If a new bidder takes over the slot before it expires, the previous owner receives a **refund** proportional to the remaining time: `refund = (1 - fractionUsed) * pricePurchased`. For example, if the previous owner paid 1,000 LP tokens and used only 6 hours (25% of the 24-hour period), they receive a refund of 750 LP tokens (75% of what they paid). This compensates them for the unused portion of their slot time. The slot's lifecycle is tracked using 20 time intervals of ~1.2 hours each (4,320 seconds) to calculate how much time has been used.
+If a new bidder takes over the slot before it expires, the previous owner receives a **refund** proportional to the remaining time: `refund = (1 - fractionUsed) * pricePurchased`. For example, if the previous owner paid 1,000 LP tokens and used 6 hours (time slot 5, so `(5+1)/20 = 30%` is treated as used), they receive a refund of 700 LP tokens (70% of what they paid). This compensates them for the unused portion of their slot time. The slot's lifecycle is tracked using 20 time intervals of ~1.2 hours each (4,320 seconds) to calculate how much time has been used.
 
 **Price Structure**:
 - When no one owns the slot or it has expired, bidders pay the minimum slot price: `TotalLPTokens * TradingFee / 25`. Note that if the `TradingFee` is 0, the minimum slot price is also 0, making the slot free to claim.
@@ -46,7 +46,7 @@ The actual pay price is then determined by reconciling the computed price with t
 
 ## 1.2. Implementation
 
-In the `rippled` C++ implementation (`AMMBid.cpp`), the main transaction handler calls the [`applyBid`](#2-applybid) function with the transaction context, sandbox view, and bidder account. This function retrieves the AMM ledger entry and the bidder's LP token holdings, then calculates the [minimum slot price](#61-minimum-slot-price) and discounted fee based on the AMM's trading fee and total LP token supply.
+In the `xrpld` C++ implementation (`AMMBid.cpp`), the main transaction handler calls the [`applyBid`](#2-applybid) function with the transaction context, sandbox view, and bidder account. This function retrieves the AMM ledger entry and the bidder's LP token holdings, then calculates the [minimum slot price](#61-minimum-slot-price) and discounted fee based on the AMM's trading fee and total LP token supply.
 
 The function calls [`ammAuctionTimeSlot`](#63-time-slot-calculation) to determine the current time interval (0-19) based on elapsed time since the slot was won. It then defines three lambda functions inline: [`validOwner`](#4-validowner) (checks if the current slot owner is valid and not in the expiring interval), [`updateSlot`](#3-updateslot) (updates auction slot fields and burns LP tokens), and [`getPayPrice`](#5-getpayprice) (determines the actual price to pay given the computed price and bid constraints).
 
@@ -84,12 +84,12 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
             return (tecINTERNAL, false)
 
     auctionSlot = ammSle.peekFieldObject(sfAuctionSlot)
-    current = ctx.view().info().parentCloseTime  # in seconds
+    current = ctx.view().header().parentCloseTime  # in seconds
 
     # Calculate fees and prices
-    discountedFee = ammSle[sfTradingFee] / AUCTION_SLOT_DISCOUNTED_FEE_FRACTION  # Divide by 10
+    discountedFee = ammSle[sfTradingFee] / kAuctionSlotDiscountedFeeFraction  # Divide by 10
     tradingFee = getFee(ammSle[sfTradingFee])
-    minSlotPrice = lptAMMBalance * tradingFee / AUCTION_SLOT_MIN_FEE_FRACTION  # Divide by 25
+    minSlotPrice = lptAMMBalance * tradingFee / kAuctionSlotMinFeeFraction  # Divide by 25
 
     # Determine current time slot (0-19)
     # Returns None if slot is not owned or expired
@@ -117,7 +117,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
             discountedFee,
             payPrice,
             payPrice,  # burn entire amount (no refund)
-            lpTokens.issue(),
+            lpTokens.asset(),
             lptAMMBalance,
             ctx.tx,
         )
@@ -125,7 +125,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
 
     # CASE 2: Slot is currently owned
     pricePurchased = auctionSlot[sfPrice]
-    fractionUsed = (timeSlot + 1) / AUCTION_SLOT_TIME_INTERVALS  # timeSlot is 0-19, so (timeSlot+1)/20
+    fractionUsed = (timeSlot + 1) / kAuctionSlotTimeIntervals  # timeSlot is 0-19, so (timeSlot+1)/20
     fractionRemaining = 1 - fractionUsed
 
     # Calculate computed price based on time slot
@@ -152,7 +152,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
         sb,
         from = account,  # New bidder pays
         to = auctionSlot[sfAccount],  # Previous owner receives
-        amount = toSTAmount(lpTokens.issue(), refund),
+        amount = toSTAmount(lpTokens.asset(), refund),
     )
     if result != tesSUCCESS:
         log "AMM Bid: failed to refund"
@@ -169,7 +169,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
         discountedFee,
         payPrice,
         burn,
-        lpTokens.issue(),
+        lpTokens.asset(),
         lptAMMBalance,
         ctx.tx,
     )
@@ -203,11 +203,11 @@ def updateSlot(
 
     # Update auction slot fields
     auctionSlot.setAccountID(sfAccount, account)
-    auctionSlot.setFieldU32(sfExpiration, current + TOTAL_TIME_SLOT_SECS)  # +86,400 seconds
+    auctionSlot.setFieldU32(sfExpiration, current + kTotalTimeSlotSecs)  # +86,400 seconds
 
     if fee != 0:
         auctionSlot.setFieldU16(sfDiscountedFee, fee)
-    else:
+    elif auctionSlot.isFieldPresent(sfDiscountedFee):
         auctionSlot.makeFieldAbsent(sfDiscountedFee)
 
     auctionSlot.setFieldAmount(sfPrice, toSTAmount(lpTokenIssue, price))
@@ -218,7 +218,7 @@ def updateSlot(
         auctionSlot.makeFieldAbsent(sfAuthAccounts)
 
     # Burn LP tokens
-    saBurn = adjustLPTokens(lptAMMBalance, toSTAmount(lpTokenIssue, burn), IsDeposit::No) # helpers.md#12-adjustlptokens
+    saBurn = adjustLPTokens(lptAMMBalance, toSTAmount(lpTokenIssue, burn), IsDeposit::No) # helpers.md#22-adjustlptokens
 
     if saBurn >= lptAMMBalance:
         # This should never happen
@@ -356,8 +356,8 @@ The `0.3^60` is essentially 0, so the price is close to the full 105% markup ear
 The auction slot is divided into 20 time intervals over 24 hours:
 
 ```
-TOTAL_TIME_SLOT_SECS = 86,400 seconds (24 hours)
-AUCTION_SLOT_TIME_INTERVALS = 20
+kTotalTimeSlotSecs = 86,400 seconds (24 hours)
+kAuctionSlotTimeIntervals = 20
 Each interval = 86,400 / 20 = 4,320 seconds (~1.2 hours)
 ```
 
@@ -429,7 +429,7 @@ The burn amount (bid price minus refund) is removed from the LP token supply:
 
 3. **Redeem (burn) LP tokens** from bidder's balance:
    ```
-   redeemIOU(sb, account, saBurn, lpTokens.issue())
+   redeemIOU(sb, account, saBurn, lpTokens.get<Issue>())
    ```
 
 4. **Decrease AMM's LPTokenBalance**:
