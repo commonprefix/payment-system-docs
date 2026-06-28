@@ -318,7 +318,7 @@ Preflight validation is orchestrated by `Transactor::invokePreflight<T>()` which
 
 Transactions that fail preflight validation are never added to the ledger. Preflight returns error codes like `tem` (malformed) that indicate fundamental problems with the transaction format. Since preflight does not access ledger state, these failures are detected before the transaction could claim a fee or consume a sequence number. If preflight fails, preclaim is not executed.[^preflight-check]
 
-[^preflight-check]: Preflight result check before preclaim: [`applySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/applySteps.cpp#L406-L407)
+[^preflight-check]: Preflight result check before preclaim: [`applySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/applySteps.cpp#L406-L407)
 
 **Transaction Consequences**:
 
@@ -366,8 +366,8 @@ All checks before and including signature verification must return NotTEC codes.
 
 Transactions that fail preclaim may or may not be added to the ledger depending on the error code. The `likelyToClaimFee` flag is set to true if the preclaim result is `tesSUCCESS` or a `tec` error code (values >= 100).[^likely-to-claim-fee] Transactions with `tec` errors are added to the ledger, consume the fee, and increment the account's sequence number, even though the transaction's intended operation fails. Other error codes (`tem`, `tef`, `ter`, `tel`) result in the transaction not being added to the ledger.[^doapply-check] This distinction ensures the network is protected from spam (by charging fees for transactions that pass basic validation) while not penalizing users for transactions that fail due to malformation or other non-chargeable issues.
 
-[^likely-to-claim-fee]: likelyToClaimFee flag calculation: [`applySteps.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/applySteps.h#L216)
-[^doapply-check]: doApply checks likelyToClaimFee flag: [`applySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/applySteps.cpp#L440-L441)
+[^likely-to-claim-fee]: likelyToClaimFee flag calculation: [`applySteps.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/applySteps.h#L216)
+[^doapply-check]: doApply checks likelyToClaimFee flag: [`applySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/applySteps.cpp#L440-L441)
 
 ## 3.3. DoApply
 
@@ -424,7 +424,7 @@ Transaction result codes (TER) are categorized by prefix and meaning:
 | **tes** | 0            | Success                                                                            | Yes         | Yes                |
 | **tec** | 100+         | Claimed fee - failed but fee charged                                               | Yes         | Yes                |
 
-[^tef]: tef characterization from source comments: [`TER.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/TER.h#L143-L154)
+[^tef]: tef characterization from source comments: [`TER.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/TER.h#L143-L154)
 
 # 5. Ledger Views and Sandboxes
 
@@ -572,6 +572,6 @@ else
     sbCancel.apply(ctx_.rawView());
 ```
 
-[^conditional-atomicity]: Conditional atomicity pattern in CreateOffer: [`CreateOffer.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L969-L990)
+[^conditional-atomicity]: Conditional atomicity pattern in CreateOffer: [`CreateOffer.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L969-L990)
 
-[^balanceHook]: Balance hook description from source comments: [`ReadView.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/ledger/ReadView.h#L149-L153)
+[^balanceHook]: Balance hook description from source comments: [`ReadView.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/ledger/ReadView.h#L149-L153)

@@ -252,15 +252,15 @@ flowchart LR
 - **[Strand Flow](#7-single-strand-evaluation-strandflow)** (another function called `flow`, accepting a single `strand` as parameter) is implemented in `StrandFlow.h` in the paths/detail module[^strandflow-entrypoint]. In this document we refer to it as `strandFlow`. It evaluates a strand using the [two-pass method](#73-reverse-and-forward-passes).
 - **Finish Flow** (`finishFlow` function) cleans up after the execution is complete.
 
-[^flow-entrypoint]: Flow entry point implementation: [`Flow.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/Flow.cpp#L45)
-[^strandsflow-entrypoint]: Iterative Strands Evaluation implementation: [`StrandFlow.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L556)
-[^strandflow-entrypoint]: Strand Flow implementation: [`StrandFlow.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L82)
-[^tostrands]: toStrands implementation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L574)
-[^quality-rate]: Quality stored as normalize(input / output) via `getRate`: [`STAmount.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/STAmount.cpp#L460-L481), [`Quality.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Quality.cpp#L17-L18)
-[^quality-comparison]: Inverted comparison operators (lower stored value = higher quality): [`Quality.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/Quality.h#L216-L230)
-[^quality-increment]: Increment decreases stored value (higher quality), decrement increases it (lower quality): [`Quality.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Quality.cpp#L21-L53)
-[^quality-no-improvement]: Quality anti-improvement check in `qualitiesSrcRedeems`: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L738-L749)
-[^composed-quality]: `composedQuality` multiplies step rates: [`Quality.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/Quality.cpp#L114-L131)
+[^flow-entrypoint]: Flow entry point implementation: [`Flow.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/Flow.cpp#L45)
+[^strandsflow-entrypoint]: Iterative Strands Evaluation implementation: [`StrandFlow.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L556)
+[^strandflow-entrypoint]: Strand Flow implementation: [`StrandFlow.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L82)
+[^tostrands]: toStrands implementation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L574)
+[^quality-rate]: Quality stored as normalize(input / output) via `getRate`: [`STAmount.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/STAmount.cpp#L460-L481), [`Quality.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/Quality.cpp#L17-L18)
+[^quality-comparison]: Inverted comparison operators (lower stored value = higher quality): [`Quality.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/Quality.h#L216-L230)
+[^quality-increment]: Increment decreases stored value (higher quality), decrement increases it (lower quality): [`Quality.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/Quality.cpp#L21-L53)
+[^quality-no-improvement]: Quality anti-improvement check in `qualitiesSrcRedeems`: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L738-L749)
+[^composed-quality]: `composedQuality` multiplies step rates: [`Quality.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/Quality.cpp#L114-L131)
 
 **Step Implementations:**
 
@@ -280,7 +280,7 @@ Each step type inherits from the `Step` interface through a `StepImp` template b
 
 **Limiting Step** - A step that restricts how much value can flow through a strand due to constraints like insufficient [trust line](../glossary.md#trust-line) credit, limited order book liquidity, or low account balance.
 
-**Default Path** - The direct route between source and destination that Flow always attempts (unless disabled by `tfNoxrpldirect` flag). See [path finding: default paths](../path_finding/README.md#24-default-paths).
+**Default Path** - The direct route between source and destination that Flow always attempts (unless disabled by `tfNoRippleDirect` flag). See [path finding: default paths](../path_finding/README.md#24-default-paths).
 
 **Partial Payment** - A payment mode where delivering less than the full requested amount is acceptable. Enabled by the `tfPartialPayment` flag on [Payment transactions](../payments/README.md).
 
@@ -327,18 +327,18 @@ Each step type calculates quality differently:
 
 See the [steps documentation](steps.md) for detailed quality calculations.
 
-[^xrp-quality]: XRPEndpointStep always returns `Quality{STAmount::kURateOne}`: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L253-L257)
-[^xrp-quality-oc]: `qualityUpperBound` is in the base template `XRPEndpointStep<TDerived>` with no override in the offer crossing variant `XRPEndpointOfferCrossingStep`: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L190-L241)
-[^mpt-quality-issues]: MPTEndpointStep applies transfer rate in `qualitiesSrcIssues` only when `redeems(prevStepDebtDirection)`: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L750-L768)
-[^mpt-oc-prev-issues]: MPTEndpointOfferCrossingStep asserts previous step always issues: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L299-L310)
-[^direct-quality-payment]: DirectIPaymentStep reads QualityIn/QualityOut from trust line fields: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L341-L380)
-[^direct-quality-issues]: DirectStepI applies transfer rate in `qualitiesSrcIssues` only when `redeems(prevStepDebtDirection)`: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L752-L771)
-[^direct-quality-oc]: DirectIOfferCrossingStep ignores trust line quality fields, always returns `QUALITY_ONE`: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L382-L388)
-[^direct-oc-prev-issues]: DirectIOfferCrossingStep asserts previous step always issues: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L296-L307)
-[^book-quality-payment]: BookPaymentStep `adjustQualityWithFees` applies input transfer fee when `redeems(prevStepDir)`: [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L338-L362)
-[^book-owner-pays]: Output transfer fee requires `ownerPaysTransferFee_`, which is only true for offer crossing: [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L356-L358)
-[^book-quality-oc]: BookOfferCrossingStep returns unmodified offer quality for CLOB and multi-path AMM: [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L510-L546)
-[^book-quality-oc-amm]: Single-path AMM input transfer fee during offer crossing requires `fixAMMv1_1`: [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L529-L545)
+[^xrp-quality]: XRPEndpointStep always returns `Quality{STAmount::kURateOne}`: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L253-L257)
+[^xrp-quality-oc]: `qualityUpperBound` is in the base template `XRPEndpointStep<TDerived>` with no override in the offer crossing variant `XRPEndpointOfferCrossingStep`: [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/XRPEndpointStep.cpp#L190-L241)
+[^mpt-quality-issues]: MPTEndpointStep applies transfer rate in `qualitiesSrcIssues` only when `redeems(prevStepDebtDirection)`: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L750-L768)
+[^mpt-oc-prev-issues]: MPTEndpointOfferCrossingStep asserts previous step always issues: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L299-L310)
+[^direct-quality-payment]: DirectIPaymentStep reads QualityIn/QualityOut from trust line fields: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L341-L380)
+[^direct-quality-issues]: DirectStepI applies transfer rate in `qualitiesSrcIssues` only when `redeems(prevStepDebtDirection)`: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L752-L771)
+[^direct-quality-oc]: DirectIOfferCrossingStep ignores trust line quality fields, always returns `QUALITY_ONE`: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L382-L388)
+[^direct-oc-prev-issues]: DirectIOfferCrossingStep asserts previous step always issues: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L296-L307)
+[^book-quality-payment]: BookPaymentStep `adjustQualityWithFees` applies input transfer fee when `redeems(prevStepDir)`: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L338-L362)
+[^book-owner-pays]: Output transfer fee requires `ownerPaysTransferFee_`, which is only true for offer crossing: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L356-L358)
+[^book-quality-oc]: BookOfferCrossingStep returns unmodified offer quality for CLOB and multi-path AMM: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L510-L546)
+[^book-quality-oc-amm]: Single-path AMM input transfer fee during offer crossing requires `fixAMMv1_1`: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L529-L545)
 
 The engine uses quality in two phases. Before executing a strand, it computes an estimated quality upper bound (the product of step quality estimates) to sort strands from best to worst and to filter out strands that fall below the `limitQuality` threshold. After executing a strand, it computes the actual quality from the execution results (actual input / actual output) and checks it against `limitQuality` again. The estimate and actual quality can differ because offers may be unfunded, balances may have changed, or rounding may have occurred. See [qualityUpperBound](#62-qualityupperbound) for details on strand sorting and filtering.
 
@@ -352,8 +352,8 @@ A step also needs to know the **previous step's** debt direction. Certain fees a
 
 See [step quality implementation](steps.md) for how each factor is conditionally applied based on debt direction and how debt direction is determined[^debt-direction-direct].
 
-[^debt-direction-enum]: `DebtDirection` enum definition: [`Steps.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/Steps.h#L21)
-[^debt-direction-direct]: DirectStepI determines debt direction via `accountHolds`: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp#L497-L498)
+[^debt-direction-enum]: `DebtDirection` enum definition: [`Steps.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/Steps.h#L21)
+[^debt-direction-direct]: DirectStepI determines debt direction via `accountHolds`: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp#L497-L498)
 
 # 3. Flow
 
@@ -473,7 +473,7 @@ ammContext.setMultiPath(strands.size() > 1);
 
 This flag determines which of the two AMM offer sizing strategies is used. See [BookStep: Offer Generation Strategies](steps.md#543-offer-generation-strategies) for details. This is only the initial value: `strandsFlow` re-computes `multiPath_` on each iteration from the count of currently-active (non-dry) strands[^multipath-reset], so the flag reflects live liquidity rather than just the post-`toStrands()` total.
 
-[^multipath-reset]: `strandsFlow` re-sets multiPath each iteration from the active-strand count: [`StrandFlow.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L640)
+[^multipath-reset]: `strandsFlow` re-sets multiPath each iteration from the active-strand count: [`StrandFlow.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L640)
 
 AMM offers can be consumed in at most 30 iterations (`kMaxIterations = 30`). The `ammIters_` counter increments each time an AMM offer is consumed. Once `ammIters_ >= 30`, `maxItersReached()` returns true and no more AMM offers are generated.
 
@@ -485,8 +485,8 @@ When a payment or offer crossing includes a `domainID` parameter, the Flow engin
 
 **Access Verification**: Before the Flow engine executes, domain access is verified during transaction preclaim. For Payment transactions, both the sender (Account) and receiver (Destination) must be "in domain"[^domain-access-payment] - either the domain owner or hold a valid accepted credential that matches one of the domain's AcceptedCredentials entries. For OfferCreate transactions, the offer creator needs to be in domain.[^domain-access-offer] If verification fails, the transaction fails with `tecNO_PERMISSION` before Flow begins execution.
 
-[^domain-access-payment]: Payment domain access verification: [`Payment.cpp:392-399`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L392-L399)
-[^domain-access-offer]: OfferCreate domain access verification: [`OfferCreate.cpp:241-245`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L241-L245)
+[^domain-access-payment]: Payment domain access verification: [`Payment.cpp:392-399`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L392-L399)
+[^domain-access-offer]: OfferCreate domain access verification: [`OfferCreate.cpp:241-245`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/dex/OfferCreate.cpp#L241-L245)
 
 Domain membership is verified using the `accountInDomain()` function, which:
 1. Checks if the account is the domain owner (immediate access)
@@ -578,7 +578,7 @@ sequenceDiagram
 
 `toStrand`[^tostrand] first normalizes the path and then converts a single path into a strand (sequence of steps).
 
-[^tostrand]: toStrand implementation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L170)
+[^tostrand]: toStrand implementation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L170)
 
 **Paths and Path Elements:**
 
@@ -606,9 +606,9 @@ Before normalization begins, the payment parameters are validated[^payment-valid
 
 After validation, `toStrand` normalizes the path[^path-normalization] before converting path elements to strand steps.
 
-[^payment-validation]: Payment parameter validation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L184-L190)
-[^path-validation]: Path element validation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L197-L238)
-[^path-normalization]: Path normalization implementation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L257-L321)
+[^payment-validation]: Payment parameter validation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L184-L190)
+[^path-validation]: Path element validation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L197-L238)
+[^path-normalization]: Path normalization implementation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L257-L321)
 
 The path is composed of path elements, and normalizing a path means that path elements that are not explicitly defined but are necessary are added to the path.
 
@@ -645,12 +645,12 @@ The normalization process constructs a complete path by adding implied elements 
     - Account: `dst`
     - Condition: The last element in normPath is NOT an account with `dst`
 
-[^source-element]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L262-L273
-[^sendmax-issuer]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L275-L284
-[^user-path-elements]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L286-L287
-[^delivery-conversion]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L289-L301
-[^delivery-issuer]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L308-L313
-[^destination-account]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L315-L320
+[^source-element]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L262-L273
+[^sendmax-issuer]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L275-L284
+[^user-path-elements]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L286-L287
+[^delivery-conversion]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L289-L301
+[^delivery-issuer]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L308-L313
+[^destination-account]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L315-L320
 
 Take for an example a payment in which Alice wants to deliver 100 MPT to Bob and spend USD (IOU) issued by Issuer for it. 
 
@@ -678,7 +678,7 @@ Here are some example normalization scenarios:
 
 The conversion process iterates through adjacent pairs of path elements in the normalized path, generating executable steps[^path-to-strand]. Path elements do not map one-to-one to steps; a single pair may generate multiple steps when intermediate issuer hops are required.
 
-[^path-to-strand]: Path to strand conversion implementation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L323-L570)
+[^path-to-strand]: Path to strand conversion implementation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L323-L570)
 
 **Core Algorithm:**
 
@@ -687,7 +687,7 @@ The conversion process iterates through adjacent pairs of path elements in the n
    - For IOUs: Set to `Asset(currency, src)`
    - For MPTs: Set to the MPTIssue
 
-[^curasset-init]: curAsset initialization: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L240-L250)
+[^curasset-init]: curAsset initialization: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L240-L250)
 
 2. **Iterate through path element pairs** (current and next)[^path-element-iteration] and for each adjacent pair of path elements, the algorithm:
    - Tracks the current asset being transferred by updating `curAsset` based on the current element's fields
@@ -695,7 +695,7 @@ The conversion process iterates through adjacent pairs of path elements in the n
    - Calls [`toStep()`](#53-step-generation) to generate the primary step that transfers value between the pair
    - Accumulates all generated steps into the final strand
 
-[^path-element-iteration]: Path element pair iteration: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L363-L506)
+[^path-element-iteration]: Path element pair iteration: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L363-L506)
 
 **Implied Step Injection:**
 
@@ -704,15 +704,15 @@ In certain cases, additional steps must be inserted instead of calling `toStep()
 - **Offer -> Account (XRP output)**[^xrp-endpoint-inject]: When an offer outputs XRP and the next element is an account: if this is the last pair, insert `XRPEndpointStep(next)`; otherwise return `temBAD_PATH` since XRP can only appear at strand endpoints
 - **Offer -> Account (IOU output, next is not issuer)**[^direct-step-inject]: When an offer outputs an IOU and the next account is not the issuer, insert `DirectStepI(issuer -> next)` and skip `toStep()` call
 
-[^xrp-endpoint-inject]: XRP endpoint injection: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L464-L471)
-[^direct-step-inject]: Direct step injection after offer: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L475-L482)
+[^xrp-endpoint-inject]: XRP endpoint injection: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L464-L471)
+[^direct-step-inject]: Direct step injection after offer: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L475-L482)
 
 ### 5.2.1. Strand Validation Context
 
 The validation context (`StrandContext`)[^strandcontext] serves two purposes during strand construction:
 
-[^strandcontext]: StrandContext struct definition: [`Steps.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/Steps.h#L517)
-[^seenassets]: seenDirectAssets and seenBookOuts initialization: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L338-L343)
+[^strandcontext]: StrandContext struct definition: [`Steps.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/Steps.h#L517)
+[^seenassets]: seenDirectAssets and seenBookOuts initialization: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L338-L343)
 
 1. **Provides execution parameters**: Carries the ledger view, source/destination accounts, quality limits, flags (ownerPaysTransferFee, offerCrossing, etc.), AMM context, the delivered asset (`strandDeliver`), and the order-book domain (`domainID`) needed for step construction and validation
 
@@ -746,7 +746,7 @@ When a step's `check()` method validates, it verifies its asset hasn't been seen
 
 After path normalization and the main conversion loop (which handles implied steps), the `toStep` function[^tostep] is called for each adjacent pair of path elements to create the appropriate step type. This function acts as a factory that examines the characteristics of the two elements in the pair and selects the correct step implementation.
 
-[^tostep]: toStep implementation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L66)
+[^tostep]: toStep implementation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L66)
 
 The choice of step type depends on three key factors:
 - **Position in strand**: Whether the strand has no steps yet (`ctx.isFirst`, set via `strand.empty()`[^isfirst]) or this is the last element pair in the normalized path (`ctx.isLast`), which affects how XRP is handled
@@ -779,23 +779,23 @@ When the second element in the pair is an order book, `toStep` creates `BookStep
   - IOU -> MPT: `BookStepIM`[^bookstep-im]
   - XRP -> XRP: Error (`temBAD_PATH`)[^bookstep-xrp-xrp]
 
-[^isfirst]: isFirst initialization: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L709)
-[^first-xrp]: First XRP element check: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L74-L78)
-[^last-xrp]: Last XRP element check: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L80-L81)
-[^account-account]: Account to account check: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L98-L108)
-[^directstepi]: DirectStepI creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L105-L107)
-[^mptendpointstep]: MPTEndpointStep creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L101-L104)
-[^offer-account]: Offer to account unreachable: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L110-L118)
-[^offer-element]: Offer element assertion: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L136)
-[^bookstep-ix]: BookStepIX creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L142)
-[^bookstep-xi]: BookStepXI creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L149)
-[^bookstep-ii]: BookStepII creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L164)
-[^bookstep-mx]: BookStepMX creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L141)
-[^bookstep-xm]: BookStepXM creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L148)
-[^bookstep-mm]: BookStepMM creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L158)
-[^bookstep-mi]: BookStepMI creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L156)
-[^bookstep-im]: BookStepIM creation: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L162)
-[^bookstep-xrp-xrp]: XRP to XRP error: [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L130-L134)
+[^isfirst]: isFirst initialization: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L709)
+[^first-xrp]: First XRP element check: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L74-L78)
+[^last-xrp]: Last XRP element check: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L80-L81)
+[^account-account]: Account to account check: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L98-L108)
+[^directstepi]: DirectStepI creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L105-L107)
+[^mptendpointstep]: MPTEndpointStep creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L101-L104)
+[^offer-account]: Offer to account unreachable: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L110-L118)
+[^offer-element]: Offer element assertion: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L136)
+[^bookstep-ix]: BookStepIX creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L142)
+[^bookstep-xi]: BookStepXI creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L149)
+[^bookstep-ii]: BookStepII creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L164)
+[^bookstep-mx]: BookStepMX creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L141)
+[^bookstep-xm]: BookStepXM creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L148)
+[^bookstep-mm]: BookStepMM creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L158)
+[^bookstep-mi]: BookStepMI creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L156)
+[^bookstep-im]: BookStepIM creation: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L162)
+[^bookstep-xrp-xrp]: XRP to XRP error: [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L130-L134)
 
 **Example: IOU to different IOU Payment with MPT bridge**
 
@@ -1103,7 +1103,7 @@ Each step type has specific validation requirements detailed in the [Steps docum
 
 > Iterative Strands Evaluation is a function called `flow` in `xrpld`[^strandsflow]. Here we call it `strandsFlow` to differentiate between the primary `flow` function and `strandFlow` function which executes a single strand.
 
-[^strandsflow]: strandsFlow implementation: [`StrandFlow.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L556)
+[^strandsflow]: strandsFlow implementation: [`StrandFlow.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L556)
 
 So far, the Flow engine has been constructing a possible set of steps that a payment can take. `Iterative Strands Evaluation` is interested in executing those strands to see if they have enough liquidity, and which ones produce the best quality.
 It executes a payment across multiple strands using iterative liquidity consumption, with all changes tracked in a PaymentSandbox (in-memory ledger view) that can be committed or discarded.
@@ -1399,13 +1399,13 @@ def strandsFlow(
 
 ## 6.2. qualityUpperBound
 
-The [`StrandFlow::qualityUpperBound`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L325-L343) function computes the composite quality of a strand. It is used in two places during `strandsFlow` execution:
+The [`StrandFlow::qualityUpperBound`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L325-L343) function computes the composite quality of a strand. It is used in two places during `strandsFlow` execution:
 
 1. **Sorting**: At the start of each `strandsFlow` iteration (the outer loop that continues until all liquidity is consumed or the payment is satisfied) to rank remaining strands by quality[^sorting-code]
 2. **Filtering**: In the inner loop that evaluates strands in quality order within each iteration, to reject strands below the `limitQuality` threshold[^filtering-code]
 
-[^sorting-code]: See [`qualityUpperBound` call in `ActiveStrands::activateNext` in StrandFlow.h](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L463)
-[^filtering-code]: See [`qualityUpperBound` call in `flow` function in StrandFlow.h](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L671) 
+[^sorting-code]: See [`qualityUpperBound` call in `ActiveStrands::activateNext` in StrandFlow.h](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L463)
+[^filtering-code]: See [`qualityUpperBound` call in `flow` function in StrandFlow.h](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L671) 
 
 **Quality Calculation:**
 
@@ -1431,12 +1431,12 @@ There is no guarantee that this quality will actually be achieved. For example, 
 
 ## 6.3. limitOut
 
-The [`limitOut`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L355-L414) function calculates the maximum output amount for a strand containing AMM liquidity that maintains a specified quality threshold. This is an AMM-specific optimization applied only when:[^limitout-call]
+The [`limitOut`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L355-L414) function calculates the maximum output amount for a strand containing AMM liquidity that maintains a specified quality threshold. This is an AMM-specific optimization applied only when:[^limitout-call]
 - There is a single strand available
 - A `limitQuality` threshold is specified
 - The strand contains at least one AMM step (a `BookStep` with AMM liquidity)
 
-[^limitout-call]: See [`limitOut` call in `flow` function in StrandFlow.h](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L647)
+[^limitout-call]: See [`limitOut` call in `flow` function in StrandFlow.h](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L647)
 
 Unlike CLOB offers which have fixed quality, AMM pools exhibit dynamic quality that degrades as more liquidity is consumed. AMMs use a constant product invariant: `poolGets * poolPays = (poolGets + in * cfee) * (poolPays - out)`. Solving for `in` and substituting into `q = out / in` gives:
 
@@ -1468,15 +1468,15 @@ The `outFromAvgQ` function inverts this relationship to solve for output: `out =
 
 A special case is handled when there is no positive `out` for the desired `limitQuality`, when `outFromAvgQ` returns a null result to indicate this is the case.
 
-[amm-m]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/QualityFunction.h#L78
-[amm-b]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/QualityFunction.h#L79
-[cfee]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/AMMCore.h#L87-L90
-[clob-m]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/QualityFunction.cpp#L14
-[clob-b]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/QualityFunction.cpp#L18
-[outfromavgq]: https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/protocol/QualityFunction.cpp#L31-L42
-[^constant-quality]: See default `Step::getQualityFunc` implementation which returns `CLOBLikeTag` in [Steps.h](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/Steps.h#L289-L295)
-[^dynamic-quality]: See `BookStep::getQualityFunc` implementation which checks `isConst()` and returns AMM quality function in [BookStep.cpp](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L590-L621), and `AMMOffer::getQualityFunc` in [AMMOffer.cpp](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/AMMOffer.cpp#L124-L129), which returns the dynamic `AMMTag` quality function only in single-path mode (in multi-path mode it returns a constant `CLOBLikeTag` function)
-[^isconst]: Quality functions constructed with `CLOBLikeTag` are constant (return `true` for `isConst()`), while those constructed with `AMMTag` are non-constant. See [QualityFunction.h](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/QualityFunction.h#L57-L60) 
+[amm-m]: https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/QualityFunction.h#L78
+[amm-b]: https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/QualityFunction.h#L79
+[cfee]: https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/AMMCore.h#L87-L90
+[clob-m]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/QualityFunction.cpp#L14
+[clob-b]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/QualityFunction.cpp#L18
+[outfromavgq]: https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/protocol/QualityFunction.cpp#L31-L42
+[^constant-quality]: See default `Step::getQualityFunc` implementation which returns `CLOBLikeTag` in [Steps.h](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/Steps.h#L289-L295)
+[^dynamic-quality]: See `BookStep::getQualityFunc` implementation which checks `isConst()` and returns AMM quality function in [BookStep.cpp](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L590-L621), and `AMMOffer::getQualityFunc` in [AMMOffer.cpp](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/AMMOffer.cpp#L124-L129), which returns the dynamic `AMMTag` quality function only in single-path mode (in multi-path mode it returns a constant `CLOBLikeTag` function)
+[^isconst]: Quality functions constructed with `CLOBLikeTag` are constant (return `true` for `isConst()`), while those constructed with `AMMTag` are non-constant. See [QualityFunction.h](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/QualityFunction.h#L57-L60) 
 
 # 7. Single Strand Evaluation (strandFlow)
 
@@ -1484,7 +1484,7 @@ A special case is handled when there is no positive `out` for the desired `limit
 
 `Single Strand Evaluation` returns how much of the `out` output parameter a strand can produce without violating `maxIn` constraint.
 
-[^strandflow-impl]: See `flow` function (single strand evaluation) in [StrandFlow.h:82-281](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L82-L281) 
+[^strandflow-impl]: See `flow` function (single strand evaluation) in [StrandFlow.h:82-281](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L82-L281) 
 
 The inputs to this function are:
 
@@ -1813,7 +1813,7 @@ The Flow engine performs validation during two main phases: path conversion and 
 
 ## 8.1. Path Conversion Errors[^path-conversion-errors]
 
-[^path-conversion-errors]: Path conversion errors (toStrands): [`PaySteps.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/PaySteps.cpp#L574-L684)
+[^path-conversion-errors]: Path conversion errors (toStrands): [`PaySteps.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L574-L684)
 
 These errors occur in `toStrands` when converting the provided paths into strands:
 
@@ -1827,7 +1827,7 @@ These errors occur during payment execution from different sources:
 
 ### 8.2.1. StrandFlow Errors[^strandflow-errors]
 
-[^strandflow-errors]: StrandFlow errors: [`StrandFlow.h`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/tx/paths/detail/StrandFlow.h#L635-L820)
+[^strandflow-errors]: StrandFlow errors: [`StrandFlow.h`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/tx/paths/detail/StrandFlow.h#L635-L820)
 
 Errors returned by the main flow execution logic:
 
@@ -1838,7 +1838,7 @@ Errors returned by the main flow execution logic:
 
 ### 8.2.2. Step Validation Errors[^step-errors]
 
-[^step-errors]: Step validation errors: [`DirectStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/DirectStep.cpp), [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp), [`XRPEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/XRPEndpointStep.cpp), [`MPTEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp)
+[^step-errors]: Step validation errors: [`DirectStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/DirectStep.cpp), [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp), [`XRPEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/XRPEndpointStep.cpp), [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp)
 
 Errors returned by individual step implementations during strand construction or execution:
 
@@ -1857,6 +1857,6 @@ Errors returned by individual step implementations during strand construction or
 
 ## 8.3. MPT-Specific Validations[^mpt-validations]
 
-[^mpt-validations]: MPT validations in Flow steps: [`BookStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/BookStep.cpp#L744-L747), [`MPTEndpointStep.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L374-L375)
+[^mpt-validations]: MPT validations in Flow steps: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L744-L747), [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L374-L375)
 
 When a cross-currency payment path includes MPT assets (with [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment enabled), the Flow engine validates MPTs using [`canTrade`](../mpts/README.md#361-cantrade). See [MPT Validation Functions](../mpts/README.md#36-mpt-validation-functions) for details on validation logic and error conditions.

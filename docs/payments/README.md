@@ -142,13 +142,13 @@ When `build_path` is `true`:
 - Rejected if `Paths` is already specified
 - Rejected for XRP-to-XRP payments
 
-[^build-path]: [`TransactionSign.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/xrpld/rpc/detail/TransactionSign.cpp#L315-L321)
+[^build-path]: [`TransactionSign.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/xrpld/rpc/detail/TransactionSign.cpp#L315-L321)
 
 ### 3.1.1. Failure Conditions
 
 **Static validation**[^static-validation]
 
-[^static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L86-L93), [`getFlagsMask`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L97-L109), [`preflight`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L113-L272)
+[^static-validation]: Static validation (preflight): [`checkExtraFeatures`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L86-L93), [`getFlagsMask`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L97-L109), [`preflight`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L113-L272)
 
 The following preflight failure conditions apply. Cases that depend on a specific amendment are noted inline:
 
@@ -178,15 +178,15 @@ The following preflight failure conditions apply. Cases that depend on a specifi
 - `temBAD_SEND_XRP_PATHS`: XRP->XRP payment specifies `Paths`.
 - `temBAD_SEND_XRP_PARTIAL`: XRP->XRP payment has `tfPartialPayment` flag.
 - `temBAD_SEND_XRP_LIMIT`: XRP->XRP payment has `tfLimitQuality` flag, or MPT->MPT payment has `tfLimitQuality` flag (only if [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled).
-- `temBAD_SEND_XRP_NO_DIRECT`: XRP->XRP payment has `tfNoxrpldirect` flag, or MPT->MPT payment has `tfNoxrpldirect` flag (only if [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled).
+- `temBAD_SEND_XRP_NO_DIRECT`: XRP->XRP payment has `tfNoRippleDirect` flag, or MPT->MPT payment has `tfNoRippleDirect` flag (only if [MPTokensV2](https://xrpl.org/resources/known-amendments#mptokensv2) amendment is not enabled).
 
 **Validation against the ledger view**[^preclaim-validation]
 
-[^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L276-L312), [`preclaim`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L315-L402)
-[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L160)
-[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L247-L266)
-[^domainid-zero]: [`Payment.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L128-L132)
-[^preflight-universal]: [`Transactor.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/Transactor.cpp#L260-L267)
+[^preclaim-validation]: Validation against ledger view (preclaim): [`checkPermission`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L276-L312), [`preclaim`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L315-L402)
+[^isLegalNet-sendmax]: Both Amount and SendMax checked via isLegalNet: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L160)
+[^delivermin-checks]: DeliverMin checked for legal amount and positive value: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L247-L266)
+[^domainid-zero]: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L128-L132)
+[^preflight-universal]: [`Transactor.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/Transactor.cpp#L260-L267)
 
 - Destination account does not exist:
     - `tecNO_DST`: payment is not XRP
@@ -211,7 +211,7 @@ The following preflight failure conditions apply. Cases that depend on a specifi
 
 **Direct XRP Payments:**[^direct-xrp-payment]
 
-[^direct-xrp-payment]: Direct XRP payment execution: [`Payment.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/payment/Payment.cpp#L594-L679)
+[^direct-xrp-payment]: Direct XRP payment execution: [`Payment.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/payment/Payment.cpp#L594-L679)
 
 - `tefINTERNAL`: Source account does not exist.
 - `tecUNFUNDED_PAYMENT`: sending the payment would leave the source account below its required reserve. When the source account is the fee payer, it must also be able to cover the fee, which may be drawn from the reserve; in a delegated payment the delegate pays the fee, so it is not charged against the source.

@@ -44,7 +44,7 @@ Credentials can also be used for:
 - **Tiered access control**: different credential types representing different authorization levels from the same issuer.
 
 [^1]: W3C Verifiable Credentials Data Model: https://www.w3.org/TR/vc-data-model-2.0/
-[^2]: For self-issued credentials (issuer == subject), the credential appears in only one directory, so SubjectNode is not set. sfSubjectNode defined as soeOPTIONAL: [`ledger_entries.macro`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/include/xrpl/protocol/detail/ledger_entries.macro#L445). SubjectNode only set in the issuer != subject branch: [`Credentials.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/credentials/CredentialCreate.cpp#L163-L174)
+[^2]: For self-issued credentials (issuer == subject), the credential appears in only one directory, so SubjectNode is not set. sfSubjectNode defined as soeOPTIONAL: [`ledger_entries.macro`](https://github.com/XRPLF/rippled/blob/3.2.0/include/xrpl/protocol/detail/ledger_entries.macro#L445). SubjectNode only set in the issuer != subject branch: [`Credentials.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/credentials/CredentialCreate.cpp#L163-L174)
 
 ## 1.1. Terminology and Concepts
 
@@ -149,8 +149,8 @@ The `Flags` field can contain the following values:
 - When `lsfAccepted` is not set: The credential exists but has not been accepted by the subject. It cannot be used for authorization. It appears in both the issuer's and subject's owner directories, but only the issuer's owner count is incremented (the issuer pays the reserve).[^3]
 - When `lsfAccepted` is set: The credential has been accepted and is active. It appears in both the issuer's and subject's owner directories and can be used for authorization.
 
-[^3]: Credential added to both directories during creation: [`Credentials.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/credentials/CredentialCreate.cpp#L147-L174)
-[^4]: Deletion authorization: [`Credentials.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/tx/transactors/credentials/CredentialDelete.cpp#L89-L94)
+[^3]: Credential added to both directories during creation: [`Credentials.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/credentials/CredentialCreate.cpp#L147-L174)
+[^4]: Deletion authorization: [`Credentials.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/transactors/credentials/CredentialDelete.cpp#L89-L94)
 - Self-issued credentials (issuer == subject) automatically have `lsfAccepted` set during creation.
 
 ### 2.1.3. Pseudo-accounts
@@ -392,7 +392,7 @@ The sender includes the hashes of credentials they hold. During transaction proc
 
 Supplying `CredentialIDs` is itself constrained: if any listed credential is expired, the transaction fails with `tecEXPIRED` before the deposit-authorization checks run, and this applies to any transaction that carries `CredentialIDs` (Payment, EscrowFinish, etc.), even when the destination does not require deposit authorization. The expired credential is also deleted as part of this (recovering its reserve), even though the transaction fails. Under the `fixCleanup3_1_3` amendment, if that deletion itself fails, the transaction halts and returns the deletion's error (e.g. `tecINTERNAL`) instead of `tecEXPIRED`.[^5]
 
-[^5]: [`CredentialHelpers.cpp`](https://github.com/XRPLF/xrpld/blob/0fffe23abc3a42e7d8016fbbd9a0beed3c40bbc9/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65)
+[^5]: [`CredentialHelpers.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/ledger/helpers/CredentialHelpers.cpp#L62-L65)
 
 **Example Flow**:
 
