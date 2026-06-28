@@ -86,7 +86,7 @@ If Alice wants to send the MPT back to the issuer (redeeming):
 
 ### 1.1.4. Example: MPT Holder to Holder
 
-Alice wants to send an MPT issued by Issuer to Bob. Both Alice and Bob are holders of the MPT. The payment path goes through the issuer. See [MPT Payment Execution](../payments/README.md#43-mpt-payment-execution) for details on how holder-to-holder transfers are processed.
+Alice wants to send an MPT issued by Issuer to Bob. Both Alice and Bob are holders of the MPT. The payment path goes through the issuer. See [MPT Payment Execution](../payments/README.md#4-payment-execution-paths) for details on how holder-to-holder transfers are processed.
 
 - **Path**: Alice -> Issuer -> Bob
 
@@ -163,7 +163,7 @@ Path 2:
 - USD/XRP order book
 - XRP/EUR order book
 
-It is the responsibility of the Flow engine to do the [path normalization](../flow/README.md#231-path-normalization) that will decide how to connect the source to the first element and how to connect the last element to the destination.
+It is the responsibility of the Flow engine to do the [path normalization](../flow/README.md#51-path-normalization) that will decide how to connect the source to the first element and how to connect the last element to the destination.
 
 Additionally, for IOU and MPT payments, path finding searches to the **effective destination** rather than the final destination. The effective destination is the issuer of the destination amount. 
 For example, if Bob is receiving EUR issued by EUR Issuer, path finding only needs to find paths that reach EUR Issuer. Similarly, if Bob is receiving an MPT, path finding finds paths that reach the MPT Issuer. Flow handles the final hop to Bob. For XRP payments, the effective destination is simply the destination account itself.
@@ -371,19 +371,19 @@ The pathfinder categorizes each payment request into one of five types:
 
 | PaymentType | Description                  | Example                                |
 |-------------|------------------------------|----------------------------------------|
-| `PaymentType::XrpToXrp` | XRP to XRP payment           | Alice sends XRP to Bob                 |
-| `PaymentType::XrpToNonXrp` | XRP to IOU or MPT payment    | Alice sends XRP, Bob receives MPT      |
-| `PaymentType::NonXrpToXrp` | IOU or MPT to XRP payment    | Alice sends USD or MPT, Bob receives XRP |
-| `PaymentType::NonXrpToSame` | Same IOU or MPT payment      | Alice sends USD, Bob receives USD (same asset) |
-| `PaymentType::NonXrpToNonXrp` | Different IOU or MPT payment | Alice sends EUR, Bob receives USD      |
+| `PaymentType.XrpToXrp` | XRP to XRP payment           | Alice sends XRP to Bob                 |
+| `PaymentType.XrpToNonXrp` | XRP to IOU or MPT payment    | Alice sends XRP, Bob receives MPT      |
+| `PaymentType.NonXrpToXrp` | IOU or MPT to XRP payment    | Alice sends USD or MPT, Bob receives XRP |
+| `PaymentType.NonXrpToSame` | Same IOU or MPT payment      | Alice sends USD, Bob receives USD (same asset) |
+| `PaymentType.NonXrpToNonXrp` | Different IOU or MPT payment | Alice sends EUR, Bob receives USD      |
 
-While `PaymentType::XrpToXrp` is defined as a payment type and is initialized with an empty path type list, XRP->XRP payments **never actually invoke the path finding or flow system**. The Payment transactor detects XRP->XRP payments and processes them as direct balance transfers, bypassing both path finding and the Flow engine entirely.
+While `PaymentType.XrpToXrp` is defined as a payment type and is initialized with an empty path type list, XRP->XRP payments **never actually invoke the path finding or flow system**. The Payment transactor detects XRP->XRP payments and processes them as direct balance transfers, bypassing both path finding and the Flow engine entirely.
 
 ## 2.3. Path Types
 
 Each payment type has a predefined table of path types at different search levels (costs). Higher search levels explore more complex paths.
 
-Example types for `PaymentType::XrpToNonXrp`:
+Example types for `PaymentType.XrpToNonXrp`:
 
 | Cost | Type | Path Structure                                               |
 |------|----------|--------------------------------------------------------------|
@@ -416,29 +416,29 @@ Higher values can exponentially increase resource usage. Setting `path_search_ma
 
 Path types are constructed from a sequence of node types. Each node type tells the path finding algorithm what kind of connection to explore at that step in the path:
 
-**`NodeType::Source` (code: `s`)** - The source account
+**`NodeType.Source` (code: `s`)** - The source account
 
 This represents the starting point of the payment. The source is always the first node in any path type. When path finding expands this node, it creates a single empty path representing the starting position at the source account.
 
-**`NodeType::Accounts` (code: `a`)** - Accounts connected via trust lines or MPTs
+**`NodeType.Accounts` (code: `a`)** - Accounts connected via trust lines or MPTs
 
 When path finding encounters an `a` node, it expands to neighboring accounts connected to the current position via [trust lines](../trust_lines/README.md) or [MPTs](../mpts/README.md). The actual account selection involves filtering by NoRipple flags, liquidity, and authorization, then ranking candidates by their number of viable outgoing paths. See [Section 4.4](#44-addlink) for details.
 
-**`NodeType::Books` (code: `b`)** - Order books for currency conversion
+**`NodeType.Books` (code: `b`)** - Order books for currency conversion
 
 When path finding encounters a `b` node, it queries [OrderBookDB](#45-orderbookdb) for all order books that accept the current currency as input, allowing the path to exchange into a different currency. See [Section 4.4](#44-addlink) for details on book expansion, including how output issuers are handled.
 
-**`NodeType::XrpBook` (code: `x`)** - Order book to XRP
+**`NodeType.XrpBook` (code: `x`)** - Order book to XRP
 
-A specialized version of `NodeType::Books` that only considers order books that convert the current currency to XRP. XRP often serves as a bridge currency between other currencies, and limiting to XRP books reduces the search space. [OrderBookDB](#45-orderbookdb) maintains a separate `xrpBooks` cache (and `xrpDomainBooks` for permissioned DEX) for faster lookups.
+A specialized version of `NodeType.Books` that only considers order books that convert the current currency to XRP. XRP often serves as a bridge currency between other currencies, and limiting to XRP books reduces the search space. [OrderBookDB](#45-orderbookdb) maintains a separate `xrpBooks` cache (and `xrpDomainBooks` for permissioned DEX) for faster lookups.
 
-**`NodeType::DestBook` (code: `f`)** - Order book to destination currency
+**`NodeType.DestBook` (code: `f`)** - Order book to destination currency
 
-This is another specialized version of `NodeType::Books` that only considers order books that output the destination currency. The `f` stands for "final" book. When path finding encounters an `f` node, it only looks for order books that convert the current currency into whatever currency the destination wants to receive. This ensures the path ends with the correct currency.
+This is another specialized version of `NodeType.Books` that only considers order books that output the destination currency. The `f` stands for "final" book. When path finding encounters an `f` node, it only looks for order books that convert the current currency into whatever currency the destination wants to receive. This ensures the path ends with the correct currency.
 
 For example, if the destination wants EUR, an `f` node will only consider order books like USD/EUR, XRP/EUR, GBP/EUR, etc.
 
-**`NodeType::Destination` (code: `d`)** - The destination account
+**`NodeType.Destination` (code: `d`)** - The destination account
 
 The destination is always the last node in any path type. When path finding encounters a `d` node, it searches for account connections to the effective destination. For IOUs and MPTs, the effective destination is the issuer, not the final recipient. If a preceding `f` step already ended at the issuer, the path is already complete and `d` has nothing to add. When it does fire, `d` adds the issuer as a trust line or MPT hop, completing the path via rippling.
 
@@ -676,7 +676,7 @@ The algorithm uses:
 The entire flow can be interrupted by using `continueCallback`. This callback allows the caller to interrupt path finding by returning `false`. It is checked at multiple points during path discovery.
 
 - **[`path_find` subscriptions](#72-path_find-rpc)** provides a callback that checks if the WebSocket client is still connected
-- **[`ripple_path_find`](#71-ripple_path_find-rpc-legacy)** and **[transaction signing with `build_path`](../payments/README.md#automatic-pathfinding-with-build_path)** do NOT provide a callback
+- **[`ripple_path_find`](#71-ripple_path_find-rpc-legacy)** and **[transaction signing with `build_path`](../payments/README.md#421-path-finding)** do NOT provide a callback
 
 
 ## 4.1. findPaths Function
@@ -706,28 +706,32 @@ def findPaths(searchLevel, continueCallback) -> bool:
     # Validate payment request
     if mDstAmount == 0:
         # Destination amount is 0
-        return false
+        return False
     
     if mSrcAccount == mDstAccount and mDstAccount == mEffectiveDst and mSrcPathAsset == mDstAmount.asset():
         # No need to send to same account with same currency
-        return false
+        return False
 
     if mSrcAccount == mEffectiveDst and mSrcPathAsset == mDstAmount.asset():
         # Default path might work, but any additional path would loop back to source
         # (since paths must end at mEffectiveDst which is the source)
-        return true
+        return True
+
+    if not mLedger:
+        # No ledger to search
+        return False
 
     if not accountExists(mSrcAccount):
         # Source account has to exist. Destination does not if we are sending XRP to it.
-        return false
+        return False
     
     if mEffectiveDst != mDstAccount and not accountExists(mEffectiveDst):
         # Issuer account has to exist
-        return false
+        return False
 
     if not accountExists(mDstAccount) and (not isXRP(mDstAmount) or mDstAmount < getAccountReserve()):
         # New account must be funded with XRP meeting minimum reserve
-        return false
+        return False
 
     # Build the source element used by addLink when the path is empty.
     # If the source asset has a non-XRP issuer, start from the issuer's account;
@@ -739,20 +743,20 @@ def findPaths(searchLevel, continueCallback) -> bool:
     issuer = xrpAccount() if isXRP(mSrcPathAsset) else account
     mSource = STPathElement(account, mSrcPathAsset, issuer)
 
-    # Determine payment type (one of: PaymentType::XrpToXrp, PaymentType::XrpToNonXrp, etc.)
+    # Determine payment type (one of: PaymentType.XrpToXrp, PaymentType.XrpToNonXrp, etc.)
     paymentType = determinePaymentType(mSrcPathAsset, mDstAmount.asset())
 
     # Search for paths using types for this payment type
     for costedPath in mPathTable[paymentType]:
         if continueCallback.shouldBreak():
-            return false
+            return False
         if costedPath.searchLevel <= searchLevel:
             # costedPath.type is a PathType (sequence of node types like "sfd", "sfad", etc.)
             addPathsForType(costedPath.type, continueCallback)
             if len(mCompletePaths) > PATHFINDER_MAX_COMPLETE_PATHS: # 1000
                 break
 
-    return true
+    return True
 ```
 
 ## 4.2. addPathsForType
@@ -798,7 +802,7 @@ def addPathsForType(pathType, continueCallback) -> list[STPath]:
         mPaths[pathType] = []
         return mPaths[pathType]
 
-    if continueCallback.shouldBreak()
+    if continueCallback.shouldBreak():
         return []
 
     # Recursive case - build parent paths first
@@ -809,17 +813,17 @@ def addPathsForType(pathType, continueCallback) -> list[STPath]:
     nodeType = pathType[-1]  # Get last node type (e.g., 'd' from "sfd")
     pathsOut = []
 
-    if nodeType == NodeType::Source:
+    if nodeType == NodeType.Source:
         pathsOut = [empty_path]
-    elif nodeType == NodeType::Accounts:
+    elif nodeType == NodeType.Accounts:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_ACCOUNTS, continueCallback=continueCallback)
-    elif nodeType == NodeType::Books:
+    elif nodeType == NodeType.Books:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_BOOKS, continueCallback=continueCallback)
-    elif nodeType == NodeType::XrpBook:
+    elif nodeType == NodeType.XrpBook:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_BOOKS | afOB_XRP, continueCallback=continueCallback)
-    elif nodeType == NodeType::DestBook:
+    elif nodeType == NodeType.DestBook:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_BOOKS | afOB_LAST, continueCallback=continueCallback)
-    elif nodeType == NodeType::Destination:
+    elif nodeType == NodeType.Destination:
         addLinks(currentPaths=parentPaths, incompletePaths=pathsOut, addFlags=afADD_ACCOUNTS | afAC_LAST, continueCallback=continueCallback)
 
     mPaths[pathType] = pathsOut
@@ -1056,8 +1060,9 @@ def addLink(currentPath, incompletePaths, addFlags, continueCallback):
                 # Handle destination account
                 if isDestination:
                     if endPathAsset == mDstAmount.asset():
-                        mCompletePaths.add(currentPath)  # Complete path
-                    else if not destOnly:
+                        if not currentPath.empty():
+                            mCompletePaths.add(currentPath)  # Complete path
+                    elif not destOnly:
                         candidates.add({priority: HIGH_PRIORITY, account: peerAccount})
                 # Skip if going back to source
                 elif peerAccount == mSrcAccount:
@@ -1092,7 +1097,9 @@ def addLink(currentPath, incompletePaths, addFlags, continueCallback):
                     continue
                 if issueMatchesOrigin(book.out):
                     continue
-                if afOB_LAST in addFlags and book.out.asset != mDstAmount.asset():
+                # afOB_LAST keeps only books whose output token matches the destination.
+                # equalTokens compares currency/MPTID and ignores the issuer.
+                if afOB_LAST in addFlags and not equalTokens(book.out, mDstAmount.asset()):
                     continue
 
                 newPath = currentPath.append(bookElement(book))
@@ -1103,11 +1110,13 @@ def addLink(currentPath, incompletePaths, addFlags, continueCallback):
                     else:
                         incompletePaths.add(newPath)
                 elif not currentPath.hasSeen(book.out.getIssuer(), book.out, book.out.getIssuer()):
-                    if hasEffectiveDst and book.out.getIssuer() == mDstAccount:
+                    if hasEffectiveDst and book.out.getIssuer() == mDstAccount and equalTokens(book.out, mDstAmount.asset()):
                         continue  # Skipped required issuer
                     elif book.out.getIssuer() == mEffectiveDst and book.out.asset == mDstAmount.asset():
                         mCompletePaths.add(newPath)  # Complete path
                     else:
+                        # If the path already ends in an account, the issuer-bearing element
+                        # replaces that trailing account rather than being appended after it.
                         incompletePaths.add(newPath.append(issuerAccount(book.out)))
 ```
 
@@ -1294,6 +1303,11 @@ def rippleCalculate(view, maxAmountIn, deliver, account, issuer, paths, domain, 
         domain=domain
     )
 
+    # Commit the simulated consumption back to the caller's view, so that sequential
+    # rippleCalculate calls (e.g. the two calls in getPathLiquidity) measure liquidity
+    # incrementally on the depleted state rather than double-counting it.
+    sandbox.apply(view)
+
     return {
         result: flowResult.result,
         actualAmountIn: flowResult.actualAmountIn,
@@ -1327,7 +1341,7 @@ Finally, the function sorts all ranked paths using multiple criteria in order of
 ### 5.2.1. rankPaths Pseudo-Code
 
 ```python
-def rankPaths(maxPaths, paths, &rankedPaths, continueCallback):
+def rankPaths(maxPaths, paths, rankedPaths, continueCallback):
     rankedPaths.clear()
 
     if convert_all_:
@@ -1473,35 +1487,40 @@ def getBestPaths(maxPaths, fullLiquidityPath, extraPaths, srcIssuer, continueCal
     remaining = mRemainingAmount
     issuerIsSender = isXRP(srcAsset) or (srcIssuer == srcAccount)
 
-    pathsIter = mPathRanks.begin()
-    extraIter = extraPathRanks.begin()
+    i = 0  # index into mPathRanks
+    j = 0  # index into extraPathRanks
 
     # Merge and select best paths
-    while pathsIter != mPathRanks.end() or extraIter != extraPathRanks.end():
-        # Determine which path to use next
-        if pathsIter == end():
-            useExtra = true
-        elif extraIter == end():
-            usePath = true
-        elif extraIter.quality < pathsIter.quality:
-            useExtra = true
-        elif extraIter.quality > pathsIter.quality:
-            usePath = true
-        elif extraIter.liquidity > pathsIter.liquidity:
-            useExtra = true
-        elif extraIter.liquidity < pathsIter.liquidity:
-            usePath = true
-        else:
-            usePath = true
-            useExtra = true  # Both might be same path
+    while i < len(mPathRanks) or j < len(extraPathRanks):
+        # Reset per-iteration flags (the C++ declares these inside the loop body)
+        usePath = False
+        useExtra = False
+        startsWithIssuer = False
 
-        rank = pathsIter if usePath else extraIter
+        # Determine which path to use next
+        if i >= len(mPathRanks):
+            useExtra = True
+        elif j >= len(extraPathRanks):
+            usePath = True
+        elif extraPathRanks[j].quality < mPathRanks[i].quality:
+            useExtra = True
+        elif extraPathRanks[j].quality > mPathRanks[i].quality:
+            usePath = True
+        elif extraPathRanks[j].liquidity > mPathRanks[i].liquidity:
+            useExtra = True
+        elif extraPathRanks[j].liquidity < mPathRanks[i].liquidity:
+            usePath = True
+        else:
+            usePath = True
+            useExtra = True  # Both might be same path
+
+        rank = mPathRanks[i] if usePath else extraPathRanks[j]
         path = mCompletePaths[rank.index] if usePath else extraPaths[rank.index]
 
         if useExtra:
-            extraIter++
+            j += 1
         if usePath:
-            pathsIter++
+            i += 1
 
         pathsLeft = maxPaths - len(bestPaths)
 
@@ -1512,12 +1531,12 @@ def getBestPaths(maxPaths, fullLiquidityPath, extraPaths, srcIssuer, continueCal
         if not issuerIsSender and usePath:
             if isDefaultPath(path) or path[0].getAccountID() != srcIssuer:
                 continue  # Skip paths that don't start with issuer
-            startsWithIssuer = true
+            startsWithIssuer = True
 
         # Apply selection rules
         if pathsLeft > 1 or (pathsLeft > 0 and rank.liquidity >= remaining):
             # Add to best paths
-            pathsLeft--
+            pathsLeft -= 1
             remaining -= rank.liquidity
             bestPaths.add(removeIssuer(path) if startsWithIssuer else path)
 

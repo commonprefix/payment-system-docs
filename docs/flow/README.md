@@ -246,8 +246,8 @@ flowchart LR
   - RPC [path finding](../path_finding/README.md) endpoints
   - CheckCash transaction
   - XChainBridge
-- **[toStrands](#4-tostrands)** is a function that converts a set of paths into strands, by calling `toStrand` on each one.
-- **[toStrand](#5-tostrand)** converts a single path to a strand through [path normalization](#51-path-normalization), [path to strand conversion](#52-path-to-strand-conversion), and [step generation](#53-step-generation)
+- **[toStrands](#4-converting-paths-to-strands-tostrands)** is a function that converts a set of paths into strands, by calling `toStrand` on each one.
+- **[toStrand](#5-path-normalization-and-strand-creation-tostrand)** converts a single path to a strand through [path normalization](#51-path-normalization), [path to strand conversion](#52-path-to-strand-conversion), and [step generation](#53-step-generation)
 - **[Iterative Strands Evaluation](#6-iterative-strands-evaluation-strandsflow)** is another function called `flow` (accepting a vector of `strands` as parameter) implemented in `StrandFlow.h`[^strandsflow-entrypoint]. In this document we refer to it as `strandsFlow`. It orchestrates evaluating each strand and deciding which of them to use.
 - **[Strand Flow](#7-single-strand-evaluation-strandflow)** (another function called `flow`, accepting a single `strand` as parameter) is implemented in `StrandFlow.h` in the paths/detail module[^strandflow-entrypoint]. In this document we refer to it as `strandFlow`. It evaluates a strand using the [two-pass method](#73-reverse-and-forward-passes).
 - **Finish Flow** (`finishFlow` function) cleans up after the execution is complete.
@@ -380,7 +380,7 @@ The `flow` function[^flow-entrypoint] is the entry point to the payment executio
 The `flow` function orchestrates payment execution by converting paths into strands and evaluating them to find the best liquidity. It executes the following operations in order:
 
 1. Creates an [`AMMContext`](#32-ammcontext) object initialized with `multiPath = false`
-2. Calls [`toStrands()`](#4-tostrands) to convert the provided paths (and optionally the default path) into executable strands
+2. Calls [`toStrands()`](#4-converting-paths-to-strands-tostrands) to convert the provided paths (and optionally the default path) into executable strands
 3. Sets `ammContext.multiPath = true` if `strands.size() > 1` (more than one strand exists)
 4. Calls [`strandsFlow()`](#6-iterative-strands-evaluation-strandsflow) to iteratively evaluate strands, consuming liquidity from the best-quality strands until the payment is satisfied or all liquidity is exhausted
 5. Calls `finishFlow()` to package the results and clean up state
@@ -389,7 +389,7 @@ The `flow` function orchestrates payment execution by converting paths into stra
 **Engine state.** The pseudocode in this and later sections (`flow`, `strandsFlow`, `strandFlow`) refers to a shared set of state rather than threading every value through each function signature:
 
 ```python
-# Engine state, shared across flow → strandsFlow → strandFlow
+# Engine state, shared across flow -> strandsFlow -> strandFlow
 sb:         PaymentSandbox     # working ledger view; writes are buffered and committed only if the payment succeeds
 deliver:    Amount            # amount + asset the destination must receive
 sendMax:    Optional[Amount]  # cap on what the source will spend (may be absent)
@@ -878,7 +878,7 @@ During path-to-strand conversion, the algorithm tracks the current asset flowing
   The issuer is immutable once the MPT is created, so the entire `mptID` must be replaced when switching between different MPTs.
 
 ```python
-# Local state for path → strand conversion (toStrand)
+# Local state for path -> strand conversion (toStrand)
 normPath: list[PathElement]   # path with implied source/dest/issuer hops added (see 5.1)
 curAsset: Issue | MPTIssue    # the asset currently flowing; updated as we walk the path
 result:   list[Step]          # the strand being built
@@ -928,7 +928,7 @@ def advance_asset(curAsset, cur):
     return curAsset
 ```
 
-> The implementation also contains two implied-step branches for `account→account` and `account→offer` pairs. The xrpld developers determined these are unreachable: `curAsset`'s issuer is always set to `cur`'s account just before the check, so their guards are always false. They are omitted here. See [`PaySteps.cpp:423-456`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L423-L456).
+> The implementation also contains two implied-step branches for `account->account` and `account->offer` pairs. The xrpld developers determined these are unreachable: `curAsset`'s issuer is always set to `cur`'s account just before the check, so their guards are always false. They are omitted here. See [`PaySteps.cpp:423-456`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/PaySteps.cpp#L423-L456).
 
 ### 5.3.2. toStep Pseudo-Code
 
@@ -1230,10 +1230,10 @@ def strandsFlow():
 
 
 # finalize_result picks the return code from how much was delivered:
-#   delivered == requested                        → success (commit sb)
-#   delivered  > requested                        → tefEXCEPTION (rounding sanity check)
-#   delivered  < requested and not partialPayment → tecPATH_PARTIAL
-#   delivered == 0 and partialPayment             → tecPATH_DRY
+#   delivered == requested                        -> success (commit sb)
+#   delivered  > requested                        -> tefEXCEPTION (rounding sanity check)
+#   delivered  < requested and not partialPayment -> tecPATH_PARTIAL
+#   delivered == 0 and partialPayment             -> tecPATH_DRY
 # Sell-mode offer crossing adds a fill-or-kill check on leftover sendMax (omitted here).
 ```
 
@@ -1567,10 +1567,10 @@ afView:       PaymentSandbox   # "all funds" snapshot of balances at the start (
 limitingStep: int             # index of the step that capped the flow (none until found)
 
 def strandFlow(strand, maxIn, out):
-    if strand is empty or is a direct XRP→XRP transfer:
+    if strand is empty or is a direct XRP->XRP transfer:
         return failure
 
-    # REVERSE pass: walk steps last → first, asking each how much input it needs
+    # REVERSE pass: walk steps last -> first, asking each how much input it needs
     # to produce the output the next step wants. See section 7.3.
     stepOut = out
     for step in reversed(strand):

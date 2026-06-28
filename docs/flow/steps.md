@@ -1,6 +1,6 @@
 # Index
 
-- [1. Introduction](#1-xrpld-strand-steps)
+- [1. Introduction](#1-introduction)
     - [1.1. Step Catalog](#11-step-catalog)
     - [1.2. Class Relationships](#12-class-relationships)
     - [1.3. Methods](#13-methods)
@@ -62,7 +62,7 @@
         - [5.5.1. `qualityUpperBound` Method](#551-qualityupperbound-method)
             - [5.5.1.1. `qualityUpperBound` Pseudo-Code](#5511-qualityupperbound-pseudo-code)
         - [5.5.2. `tipOfferQuality` Helper Function](#552-tipofferquality-helper-function)
-            - [5.5.2.1. `tipOfferQuality` Pseudo-Code](#5521-tipofferquality-pseudo-code)
+            - [5.5.2.1. `tipOfferQuality` Pseudo-Code](#552-tipofferquality-helper-function)
         - [5.5.3. `adjustQualityWithFees` - BookPaymentStep Implementation](#553-adjustqualitywithfees---bookpaymentstep-implementation)
             - [5.5.3.1. `adjustQualityWithFees` Pseudo-Code](#5531-adjustqualitywithfees-pseudo-code)
         - [5.5.4. `adjustQualityWithFees` - BookOfferCrossingStep Implementation](#554-adjustqualitywithfees---bookoffercrossingstep-implementation)
@@ -76,7 +76,7 @@ The [payment engine](README.md) in `xrpld` uses **[Strands](README.md#11-strands
 The **fundamental types** of steps in `xrpld`:
 
 1. **DirectStepI** - [IOU](../glossary.md#iou) transfer between accounts via trust line
-2. **BookStep** - Asset conversion through order books and [AMM](../glossary.md#amm) pools
+2. **BookStep** - Asset conversion through order books and [AMM](../amms/README.md) pools
 3. **XRPEndpointStep** - Strand endpoint for [XRP](../glossary.md#xrp) (first or last step only)
 4. **MPTEndpointStep** - Strand endpoint for [MPT](../glossary.md#mpt) (first or last step only)
 
@@ -260,16 +260,16 @@ def revImp(sb, out):
 
     if srcToDst <= maxSrcToDst:  # Non-limiting case, we have enough liquidity
         # Calculate how much input is required for the promised output. The full transformation is:
-        #   in --[srcQOut]→ srcToDst --[dstQIn]→ out
+        #   in --[srcQOut]-> srcToDst --[dstQIn]-> out
         in = roundUp(srcToDst * srcQOut / QUALITY_ONE)
-        move(sb, src_ → dst_, srcToDst)
+        move(sb, src_ -> dst_, srcToDst)
         cache_ = (in, srcToDst, out, debtDir)
         return (in, out)
 
     # We don't have enough liquidity, so we will require as much input as will produce maximum output we can have
     in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
     actualOut = roundDown(maxSrcToDst * dstQIn / QUALITY_ONE)
-    move(sb, src_ → dst_, maxSrcToDst)
+    move(sb, src_ -> dst_, maxSrcToDst)
     cache_ = (in, maxSrcToDst, actualOut, debtDir)
     return (in, actualOut)
 ```
@@ -311,7 +311,7 @@ def fwdImp(sb, in):
     # if they changed from rev to fwd passes.
     setCacheLimiting(in, srcToDst, out, debtDir)
     # Make the payment using the cached srcToDst value
-    move(sb, src_ → dst_, cache_.srcToDst)
+    move(sb, src_ -> dst_, cache_.srcToDst)
 
     # This ensures that the forward pass never returns better rates than reverse pass promised
     return (cache_.in, cache_.out)
@@ -467,7 +467,7 @@ def quality(sb, qDir):
         return QUALITY_ONE
 
     # Read trust line
-    sle = sb.read(keylet::line(dst_, src_, currency_))
+    sle = sb.read(keylet.line(dst_, src_, currency_))
     if not sle:
         return QUALITY_ONE
 
@@ -506,7 +506,7 @@ In DirectIPaymentStep, `maxFlow` returns:
 # The out parameter is unused
 def maxFlow(sb, out):
     # Get the balance of src_ on the trustline
-    srcOwed = accountHolds(sb, src_, currency_, dst_, FreezeHandling::IgnoreFreeze)
+    srcOwed = accountHolds(sb, src_, currency_, dst_, FreezeHandling.IgnoreFreeze)
 
     if srcOwed > 0:
         # Holder is sending to issuer, they can only send as much as was issued to them
@@ -654,7 +654,7 @@ MPTEndpointStep handles Multi-Purpose Token (MPT) transfers at the source or des
 [^mpt-issuer-check]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L893-L897)
 [^mpt-debt-direction]: [`MPTEndpointStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/MPTEndpointStep.cpp#L459-L464)
 
-For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the issuing step (when `qualitiesSrcIssues` sees that the previous step redeemed). See [Direct MPT Payment Execution](../payments/README.md#43-mpt-payment-execution) for detailed holder-to-holder transfer mechanics.
+For holder-to-holder payments, the payment path contains two MPTEndpointSteps: the first step redeems from holder to issuer, and the last step issues from issuer to holder. Transfer fees are applied during the issuing step (when `qualitiesSrcIssues` sees that the previous step redeemed). See [Direct MPT Payment Execution](../payments/README.md#4-payment-execution-paths) for detailed holder-to-holder transfer mechanics.
 
 For non-issuer accounts, authorization is validated via `requireAuth`[^mpt-require-auth], which checks the [`lsfMPTRequireAuth`](../mpts/README.md#2121-flags) flag on the issuance and the [`lsfMPTAuthorized`](../mpts/README.md#2221-flags) flag on the holder's MPToken. When the issuance has a [DomainID](../mpts/README.md#11-domainid-and-authorization) set, credentials are validated against that domain. DEX operations validate the [`lsfMPTCanTrade`](../mpts/README.md#2121-flags) flag via [`canTrade`](../mpts/README.md#361-cantrade); issuance- and holder-level lock flags are checked separately by `isGlobalFrozen` and `isIndividualFrozen`.
 
@@ -709,13 +709,13 @@ def revImp(sb, out):
     if srcToDst <= maxSrcToDst:
         # Non-limiting
         in = roundUp(srcToDst * srcQOut / QUALITY_ONE)
-        move(sb, src_ → dst_, srcToDst)
+        move(sb, src_ -> dst_, srcToDst)
         cache_ = (in, srcToDst, srcToDst, debtDir)
         return (in, out)
 
     # Limiting
     in = roundUp(maxSrcToDst * srcQOut / QUALITY_ONE)
-    move(sb, src_ → dst_, maxSrcToDst)
+    move(sb, src_ -> dst_, maxSrcToDst)
     cache_ = (in, maxSrcToDst, maxSrcToDst, debtDir)
     return (in, maxSrcToDst)
 ```
@@ -771,7 +771,7 @@ def fwdImp(sb, in):
         out = maxSrcToDst
     setCacheLimiting(in, srcToDst, out, debtDir)         # never exceed what revImp promised
     # Transfer MPT using cached amount from reverse pass
-    move(sb, src_ → dst_, cache_.srcToDst)
+    move(sb, src_ -> dst_, cache_.srcToDst)
     return (cache_.in, cache_.out)
 ```
 
@@ -788,7 +788,7 @@ The `srcQOut` value depends on the debt direction:
   - If previous step redeems: `srcQOut = transferRate(mptID)` (an issuance-level transfer fee set via the MPToken issuance's `TransferFee` field)
   - Otherwise: `srcQOut = QUALITY_ONE`
 
-Transfer fees only apply when tokens move between holders through the issuer as an intermediary. See [Holder-to-Holder Transfer](../payments/README.md#4313-holder-to-holder-transfer-with-transfer-fee) for the two-step transfer fee mechanism.
+Transfer fees only apply when tokens move between holders through the issuer as an intermediary. See [Holder-to-Holder Transfer](../payments/README.md#4-payment-execution-paths) for the two-step transfer fee mechanism.
 
 ### 4.3.1. `qualityUpperBound` Pseudo-Code
 
@@ -1017,7 +1017,7 @@ Like other step implementations, BookStep maintains state between reverse and fo
 Throughout this section, member variables suffixed with `_` (e.g., `book_`, `ownerPaysTransferFee_`) represent object state that persists across method calls. 
 
 ```python
-# BookStep state (converts book_.in → book_.out via CLOB offers and an AMM pool)
+# BookStep state (converts book_.in -> book_.out via CLOB offers and an AMM pool)
 book_:                  Book                 # asset pair (+ optional domain) for this order book
 strandSrc_, strandDst_: AccountID            # the strand's overall source and destination
 prevStep_:              Step or None
@@ -1483,7 +1483,7 @@ The `qualityUpperBound` method[^bookstep-qualityupperbound-impl] for BookStep re
 
 [^bookstep-qualityupperbound-impl]: [`BookStep.cpp`](https://github.com/XRPLF/rippled/blob/3.2.0/src/libxrpl/tx/paths/BookStep.cpp#L572-L586)
 
-The method calls the polymorphic `adjustQualityWithFees()` function, which has different implementations for [payment steps](#554-adjustqualitywithfees---bookpaymentstep-implementation) versus [offer crossing steps](#555-adjustqualitywithfees---bookoffercrossingstep-implementation).
+The method calls the polymorphic `adjustQualityWithFees()` function, which has different implementations for [payment steps](#553-adjustqualitywithfees---bookpaymentstep-implementation) versus [offer crossing steps](#554-adjustqualitywithfees---bookoffercrossingstep-implementation).
 
 #### 5.5.1.1. `qualityUpperBound` Pseudo-Code
 

@@ -68,7 +68,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
     # Get AMM ledger entry
     ammSle = sb.getAMM(ctx.tx[sfAsset], ctx.tx[sfAsset2])
     if not ammSle:
-        return (tecINTERNAL, false)
+        return (tecINTERNAL, False)
 
     lptAMMBalance = ammSle[sfLPTokenBalance]
     lpTokens = ammLPHolds(sb, ammSle, account)
@@ -81,7 +81,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
             ammSle.makeFieldPresent(sfAuctionSlot)
     else:
         if not ammSle.isFieldPresent(sfAuctionSlot):
-            return (tecINTERNAL, false)
+            return (tecINTERNAL, False)
 
     auctionSlot = ammSle.peekFieldObject(sfAuctionSlot)
     current = ctx.view().header().parentCloseTime  # in seconds
@@ -105,7 +105,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
         # Pay minimum price, no refund
         payPrice = getPayPrice(minSlotPrice, bidMin, bidMax, lpTokens)
         if payPrice is error:
-            return (payPrice.error(), false)
+            return (payPrice.error(), False)
 
         # Update slot with new owner
         result = updateSlot(
@@ -138,14 +138,14 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
 
     payPrice = getPayPrice(computedPrice, bidMin, bidMax, lpTokens)
     if payPrice is error:
-        return (payPrice.error(), false)
+        return (payPrice.error(), False)
 
     # Calculate refund to previous owner
     refund = fractionRemaining * pricePurchased
     if refund > payPrice:
         # This should never happen
         log "AMM Bid: refund exceeds payPrice"
-        return (tecINTERNAL, false)
+        return (tecINTERNAL, False)
 
     # Send refund to previous owner
     result = accountSend(
@@ -156,7 +156,7 @@ def applyBid(ctx: ApplyContext, sb: &Sandbox, account: AccountID):
     )
     if result != tesSUCCESS:
         log "AMM Bid: failed to refund"
-        return (result, false)
+        return (result, False)
 
     # Update slot with new owner
     burn = payPrice - refund
@@ -218,7 +218,7 @@ def updateSlot(
         auctionSlot.makeFieldAbsent(sfAuthAccounts)
 
     # Burn LP tokens
-    saBurn = adjustLPTokens(lptAMMBalance, toSTAmount(lpTokenIssue, burn), IsDeposit::No) # helpers.md#22-adjustlptokens
+    saBurn = adjustLPTokens(lptAMMBalance, toSTAmount(lpTokenIssue, burn), IsDeposit=False) # helpers.md#22-adjustlptokens
 
     if saBurn >= lptAMMBalance:
         # This should never happen
@@ -252,7 +252,8 @@ def validOwner(account: AccountID, timeSlot: Optional[int], sb: &Sandbox) -> boo
 
     # Valid range is 0-19 but the tailing slot pays MinSlotPrice
     # and doesn't refund so the check is < instead of <= to optimize.
-    return timeSlot and timeSlot < 19 and sb.read(keylet.account(account))
+    # timeSlot is an optional: test presence separately, since slot 0 is a valid owner.
+    return timeSlot is not None and timeSlot < 19 and sb.read(keylet.account(account))
 ```
 
 # 5. getPayPrice
@@ -418,7 +419,7 @@ The burn amount (bid price minus refund) is removed from the LP token supply:
 
 1. **Adjust burn amount** for LP token precision:
    ```
-   saBurn = adjustLPTokens(lptAMMBalance, burn, IsDeposit::No)
+   saBurn = adjustLPTokens(lptAMMBalance, burn, IsDeposit=False)
    ```
 
 2. **Validate burn amount** doesn't exceed AMM balance:
