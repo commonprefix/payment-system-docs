@@ -1,10 +1,10 @@
+> [!NOTE]
+> This documentation reflects the XRP Ledger release [3.2.0](https://github.com/XRPLF/rippled/tree/3.2.0). Source references throughout link to that tag.
+
 > [!WARNING]
 > 🚧 This documentation is **work in progress**
 
 # 1. XRPL Payment System
-
-> [!NOTE]
-> This documentation reflects the XRP Ledger release [3.2.0](https://github.com/XRPLF/rippled/tree/3.2.0). 
 
 > [!IMPORTANT]
 > This is a technical specification document intended for developers implementing or verifying XRPL payment system behavior. For user-facing documentation and a high-level overview of XRPL features, please visit [https://xrpl.org/docs](https://xrpl.org/docs).
